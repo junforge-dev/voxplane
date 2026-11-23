@@ -364,8 +364,11 @@ class VolumeViewportHost(QWidget):
         # On Windows the VTK child can cover its entire host. Qt then reports
         # the host as unexposed even while the child is visible on screen.
         owner = self.controller._native_owner
-        window = owner.window() if sys.platform == "win32" and owner is not None else self.windowHandle()
-        return window is not None and window.isExposed()
+        if sys.platform == "win32" and owner is not None:
+            # Read the QML boolean rather than taking a Python wrapper for the
+            # owner's QQuickWindow across page destruction and reattachment.
+            return bool(owner.property("presentationWindowVisible"))
+        return self.windowHandle().isExposed()
 
     def surface_ready(self):
         child = self.vtk_widget.windowHandle()

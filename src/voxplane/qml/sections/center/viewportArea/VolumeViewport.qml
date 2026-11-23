@@ -12,6 +12,8 @@ Item {
     property bool capturingPng: false
     property var attachedController: null
     property bool presentationReported: false
+    readonly property bool presentationWindowVisible: !!Window.window
+        && Window.window.visibility !== Window.Hidden && Window.window.visibility !== Window.Minimized
     signal presentationReady(bool success)
 
     function attach() {

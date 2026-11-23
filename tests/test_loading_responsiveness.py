@@ -378,9 +378,10 @@ def test_windows_embedded_host_can_be_covered_by_its_own_render_surface(host, mo
 
     h, c = host
     monkeypatch.setattr(volume_viewport_host, "sys", SimpleNamespace(platform="win32"))
-    presentation = Mock()
-    presentation.isExposed.return_value = True
-    monkeypatch.setattr(c, "_native_owner", Mock(window=lambda: presentation))
+    from PySide6.QtCore import QObject
+    owner = QObject()
+    owner.setProperty("presentationWindowVisible", True)
+    monkeypatch.setattr(c, "_native_owner", owner)
     monkeypatch.setattr(h, "windowHandle", lambda: Mock(isExposed=lambda: False))
     h.sync_status()
     wait_until(lambda: h.data_ready)
@@ -388,7 +389,7 @@ def test_windows_embedded_host_can_be_covered_by_its_own_render_surface(host, mo
     h._render()
     assert h.frame_ready and h.surface_ready()
 
-    presentation.isExposed.return_value = False
+    owner.setProperty("presentationWindowVisible", False)
     assert not h.surface_ready()
     h.request_render()
     h._timer.stop()

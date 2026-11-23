@@ -1,0 +1,480 @@
+{
+  "tag": "v2.8.0",
+  "commit": "eb99c78fe61f53c74081110edbf5448d8381bb6f",
+  "macOS": {
+    "full": {
+      "files": 317,
+      "passed": 4301,
+      "skipped": 96
+    },
+    "native": {
+      "files": 12,
+      "passed": 209,
+      "skipped": 0
+    },
+    "samples": {
+      "files": 6,
+      "passed": 51,
+      "skipped": 0
+    }
+  },
+  "windows_run": "45115884884",
+  "windows_full": {
+    "tests": 4397,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 122
+  },
+  "packages_verified": true,
+  "previous_client_public_updates": {
+    "macOS": {
+      "previous": "2.7.0",
+      "actual": "2.8.0",
+      "button": "Download and update",
+      "startup": "verified",
+      "source": "public latest release",
+      "isolated": true
+    },
+    "windows": {
+      "run": "45126760818",
+      "clients": {
+        "setup": {
+          "kind": "setup",
+          "startup": "verified",
+          "actual": "2.8.0",
+          "previous": "2.7.0",
+          "button": "下载并更新",
+          "source": "public latest release"
+        },
+        "portable": {
+          "button": "下载并更新",
+          "previous": "2.7.0",
+          "source": "public latest release",
+          "kind": "portable",
+          "actual": "2.8.0",
+          "startup": "verified"
+        }
+      }
+    }
+  },
+  "windows_focused": {
+    "run": "45115924502",
+    "candidate": "eb99c78fe61f53c74081110edbf5448d8381bb6f",
+    "workflow_commit": "7ad7b51709acbf0a14fdae21f3b04d012fae048c",
+    "transfer_rounds_per_platform": 12,
+    "transfer_assertions_per_round": 11,
+    "platforms": [
+      "windows",
+      "offscreen"
+    ],
+    "results": {
+      "affected": {
+        "tests": 458,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 7
+      },
+      "release-native": {
+        "tests": 82,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    }
+  },
+  "windows_previous_upgrade": {
+    "status": "passed",
+    "candidate": "2.8.0",
+    "packages": {
+      "windows_portable": {
+        "status": "passed",
+        "baseline": "2.7.0",
+        "candidate": "2.8.0",
+        "installation": "current_helper",
+        "workspace_runtime": "passed",
+        "settings": "passed",
+        "old_client_update_button": "not_exercised"
+      },
+      "windows_installer": {
+        "status": "passed",
+        "baseline": "2.7.0",
+        "candidate": "2.8.0",
+        "installation": "current_helper",
+        "workspace_runtime": "passed",
+        "settings": "passed",
+        "old_client_update_button": "not_exercised"
+      }
+    },
+    "old_client_update_button": "not_exercised",
+    "baseline": "v2.7.0",
+    "baseline_manifest_sha256": "06f6b29b37f6804652239a83de85a73ba34dd0529a193467f13be7356b85be50"
+  },
+  "mac_skip_reasons": {
+    "Opt-in OrbStack DIMSE lab": 10,
+    "Desktop mouse-grab acceptance requires a native window platform": 1,
+    "Requires a native desktop OpenGL window": 9,
+    "Requires native macOS AppKit": 1,
+    "Set VOXPLANE_MR_SAMPLE_DIR to the public sample directory": 14,
+    "Requires a native desktop and VTK window": 1,
+    "Chinese PDF glyph coverage requires the native macOS or Windows font database": 1,
+    "Native QVTK canvas": 1,
+    "Requires a native macOS or Windows desktop": 1,
+    "Requires a native VTK desktop window": 3,
+    "Native first-exposure positioning needs a desktop window": 1,
+    "requires native desktop window": 7,
+    "Native Windows PowerShell handoff": 1,
+    "Native Windows PowerShell replacement": 2,
+    "Native Windows installer handoff and rollback": 2,
+    "PET intensity controls use the shared PET display controller": 1,
+    "Requires native VTK child windows": 2,
+    "Set VOXPLANE_COMPRESSED_SAMPLE_DIR to fixed public fixture directory": 5,
+    "Requires native window controls": 2,
+    "Requires the native Windows desktop": 2,
+    "Opt-in Docker PACS lab": 14,
+    "Needs native desktop and OpenGL": 1,
+    "Set VOXPLANE_COMPRESSED_SAMPLE_DIR": 1,
+    "Requires native caption and VTK windows": 1,
+    "Native VTK requires a desktop surface": 4,
+    "Set VOXPLANE_ENHANCED_CT_SAMPLE_DIR to the public sample directory": 2,
+    "Requires a native desktop OpenGL surface": 1,
+    "Requires native window capture": 1,
+    "Native views and captures": 4
+  },
+  "windows_acceptance": {
+    "controller-lifetimes": {
+      "files": 10,
+      "counts": {
+        "tests": 115,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1
+      },
+      "failed": [],
+      "skipped_reasons": {
+        "Desktop mouse-grab acceptance requires a native window platform": 1
+      }
+    },
+    "cpr-update-regressions": {
+      "files": 2,
+      "counts": {
+        "tests": 32,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "report-close-regressions": {
+      "files": 3,
+      "counts": {
+        "tests": 53,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    ".": {
+      "files": 317,
+      "counts": {
+        "tests": 4397,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 122
+      },
+      "failed": [],
+      "skipped_reasons": {
+        "Opt-in OrbStack DIMSE lab": 10,
+        "Desktop mouse-grab acceptance requires a native window platform": 1,
+        "Local TotalSegmentator Python is not installed": 4,
+        "Local exchange Python is not installed": 1,
+        "Requires a native desktop OpenGL window": 9,
+        "Requires native macOS AppKit": 1,
+        "Set VOXPLANE_MR_SAMPLE_DIR to the public sample directory": 14,
+        "Requires a native desktop and VTK window": 1,
+        "POSIX ownership protocol": 7,
+        "Release-job shell harness requires POSIX; direct Python helper tests run on Windows": 6,
+        "Exercises Ubuntu release-job bash and POSIX gh shim": 3,
+        "Chinese PDF glyph coverage requires the native macOS or Windows font database": 1,
+        "Native QVTK canvas": 1,
+        "Requires a native macOS or Windows desktop": 1,
+        "Requires a native VTK desktop window": 3,
+        "Native first-exposure positioning needs a desktop window": 1,
+        "requires native desktop window": 7,
+        "Chinese PDF glyph coverage runs against the native Windows font database": 5,
+        "Native macOS DMG and app replacement": 5,
+        "PET intensity controls use the shared PET display controller": 1,
+        "Requires native VTK child windows": 2,
+        "Set VOXPLANE_COMPRESSED_SAMPLE_DIR to fixed public fixture directory": 5,
+        "Requires native window controls": 2,
+        "Requires the native Windows desktop": 2,
+        "Opt-in Docker PACS lab": 14,
+        "Needs native desktop and OpenGL": 1,
+        "Set VOXPLANE_COMPRESSED_SAMPLE_DIR": 1,
+        "Requires native caption and VTK windows": 1,
+        "Native VTK requires a desktop surface": 4,
+        "Set VOXPLANE_ENHANCED_CT_SAMPLE_DIR to the public sample directory": 2,
+        "Requires a native desktop OpenGL surface": 1,
+        "Requires native window capture": 1,
+        "Native views and captures": 4
+      }
+    },
+    "transitions-1": {
+      "files": 8,
+      "counts": {
+        "tests": 98,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "transitions-2": {
+      "files": 8,
+      "counts": {
+        "tests": 98,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "transitions-3": {
+      "files": 8,
+      "counts": {
+        "tests": 98,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "viewport-presentation": {
+      "files": 2,
+      "counts": {
+        "tests": 16,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 3
+      },
+      "failed": [],
+      "skipped_reasons": {
+        "Requires a native desktop OpenGL window": 3
+      }
+    },
+    "windows-d3d-scalar": {
+      "files": 1,
+      "counts": {
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "windows-native-2.6": {
+      "files": 13,
+      "counts": {
+        "tests": 169,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "windows-native-2.7": {
+      "files": 6,
+      "counts": {
+        "tests": 138,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "windows-native-caption": {
+      "files": 1,
+      "counts": {
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "windows-native-import": {
+      "files": 1,
+      "counts": {
+        "tests": 24,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "windows-native-import-chrome": {
+      "files": 1,
+      "counts": {
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "windows-native-pdf": {
+      "files": 1,
+      "counts": {
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "windows-native-popup-keys": {
+      "files": 2,
+      "counts": {
+        "tests": 23,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "windows-native-transfers": {
+      "files": 3,
+      "counts": {
+        "tests": 64,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "windows-native-volume": {
+      "files": 2,
+      "counts": {
+        "tests": 13,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "windows-native-workspace": {
+      "files": 1,
+      "counts": {
+        "tests": 32,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "failed": [],
+      "skipped_reasons": {}
+    },
+    "windows-update-helper": {
+      "files": 1,
+      "counts": {
+        "tests": 12,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 5
+      },
+      "failed": [],
+      "skipped_reasons": {
+        "Native macOS DMG and app replacement": 5
+      }
+    }
+  },
+  "mac_upgrade": {
+    "from": "2.7.0",
+    "to": "2.8.0",
+    "method": "real package with current update helper; isolated installation",
+    "old_client_button": "not_exercised",
+    "startup_health_acknowledged": true,
+    "old_workspace_restored": true,
+    "settings_preserved": true,
+    "package_sha256": "768a40aa1fbfcdab32523b92887e331610003699382924d2101e0dc490309305"
+  },
+  "windows_upgrade": {
+    "status": "passed",
+    "candidate": "2.8.0",
+    "packages": {
+      "windows_portable": {
+        "status": "passed",
+        "baseline": "2.5.0",
+        "candidate": "2.8.0",
+        "installation": "manual_brand_migration",
+        "workspace_runtime": "passed",
+        "settings": "passed",
+        "old_client_update_button": "not_exercised"
+      },
+      "windows_installer": {
+        "status": "passed",
+        "baseline": "2.5.0",
+        "candidate": "2.8.0",
+        "installation": "manual_brand_migration",
+        "workspace_runtime": "passed",
+        "settings": "passed",
+        "old_client_update_button": "not_exercised"
+      }
+    },
+    "old_client_update_button": "not_exercised",
+    "baseline": "v2.5.0",
+    "baseline_manifest_sha256": "43480ba4dd3aa08a78b91b2fbdef40a0747da771a698fd0d3845b2528a8b7c8f"
+  },
+  "mac_bundle": {
+    "commit": "eb99c78fe61f53c74081110edbf5448d8381bb6f",
+    "entries": 1806,
+    "mounted_equals_build": true
+  },
+  "windows_qml_resources": 461,
+  "assets": [
+    {
+      "name": "VoxPlane-2.8.0-macos-arm64.dmg",
+      "size": 132332601,
+      "digest": "sha256:768a40aa1fbfcdab32523b92887e331610003699382924d2101e0dc490309305"
+    },
+    {
+      "name": "VoxPlane-2.8.0-macos-arm64.dmg.sha256",
+      "size": 97,
+      "digest": "sha256:98a5ee90faea2b29e481dcddd6c4724bb4636140489ddce1f4f9029cfd31ee8b"
+    },
+    {
+      "name": "VoxPlane-2.8.0-windows-x64-portable.exe",
+      "size": 208610736,
+      "digest": "sha256:0602f72af06171e1e2a23a660fb122d4eeb68245be9afa406a8d8db8bb993915"
+    },
+    {
+      "name": "VoxPlane-2.8.0-windows-x64-portable.exe.sha256",
+      "size": 106,
+      "digest": "sha256:65ea505642377e70c0f6889d5bfa683c21675b3b5fd2ea2e59a593ada4752842"
+    },
+    {
+      "name": "VoxPlane-2.8.0-windows-x64-setup.exe",
+      "size": 131522295,
+      "digest": "sha256:a9815265c60c3998a7cdc66ff486111fb35ae8bdaae1b28000a02ead44d25ffd"
+    },
+    {
+      "name": "VoxPlane-2.8.0-windows-x64-setup.exe.sha256",
+      "size": 103,
+      "digest": "sha256:7cba56c2a03db1ba2123f051b3a71b3b9583419cc69497bc29e549f751906cb1"
+    }
+  ]
+}

@@ -414,7 +414,7 @@ class VolumeViewportHost(QWidget):
             self._last_draw = monotonic()
 
     def eventFilter(self, watched, event):
-        if event.type() == QEvent.Expose:
+        if not self._disposed and event.type() == QEvent.Expose:
             # Cocoa can emit Expose after every buffer swap. Scheduling a
             # render for every such event creates an endless redraw loop.
             # State/resize changes already request their own renders.

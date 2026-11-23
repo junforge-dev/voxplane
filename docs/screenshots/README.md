@@ -2,7 +2,12 @@
 
 VoxPlane 的实际应用界面：当前界面截图与操作动画。[中文首页](../../README.md) · [English README](../../README.en.md)
 
-## 2.6.0 当前界面
+## 2.8.0 测量与导出
+
+- [在目标切片上查看原位粘贴后的 ROI 统计](roi-in-place-2.8.0.png) · [English](en/roi-in-place-2.8.0.png)
+- [导出前逐帧核对影像与烧录文字提示](export-frames-2.8.0.png) · [English](en/export-frames-2.8.0.png)
+
+## 2.6.0 界面
 
 中英文截图与动画均由 VoxPlane 2.6.0 候选版本重新捕获，使用合成或匿名展示影像。窗口内容与相应功能状态一同核对；AI 动画使用模拟推理输出，仅说明操作流程。
 

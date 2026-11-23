@@ -166,6 +166,8 @@ Copy and paste completed measurements or annotations with **⌘C / ⌘V (Windows
 
 Copy a rectangle, ellipse, or freehand ROI, then choose Paste ROI in place on another original 2D slice of the same series and phase to keep the contour and measure the target pixels. Use ⇧⌘V on macOS or Ctrl+Shift+V on Windows.
 
+[ROI statistics on the target slice](docs/screenshots/en/roi-in-place-2.8.0.png) · [Frame review before export](docs/screenshots/en/export-frames-2.8.0.png)
+
 Unselected ROIs use compact labels and expand their statistics when selected. Metrics wait for enough valid points. Partly out-of-image ROIs use valid pixels for intensity statistics while retaining their full drawn area and dimensions.
 
 ![Measurement tools and grouped results](docs/screenshots/en/63-measurement-voxplane-2.6.0.png)

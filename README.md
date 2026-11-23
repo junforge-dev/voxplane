@@ -166,6 +166,8 @@ CT、PET、融合切面与全体积 MIP 联动显示；可切换三向切面、�
 
 复制矩形、椭圆或自由手绘 ROI 后，在同一序列、同一时相的另一张原始 2D 切片选择“在本层原位粘贴 ROI”，即可保留轮廓并按目标层像素重算统计。默认使用 ⇧⌘V（Windows 为 Ctrl+Shift+V）。
 
+[本层粘贴后的 ROI 统计](docs/screenshots/roi-in-place-2.8.0.png) · [导出前逐帧核对](docs/screenshots/export-frames-2.8.0.png)
+
 未选中的 ROI 使用紧凑标签，选中后展开统计；点数不足时不显示指标。部分超出影像的 ROI 仅按有效像素计算灰度统计，面积和尺寸仍保留完整绘制范围。
 
 ![测量工具与分组结果列表](docs/screenshots/63-measurement-voxplane-2.6.0.png)

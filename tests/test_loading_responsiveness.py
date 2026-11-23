@@ -74,6 +74,20 @@ def host(qt_app, loaded_tab, headless_volume_interactor, monkeypatch):
     loaded_tab.dispose()
 
 
+def test_disposed_host_ignores_late_native_expose(host, loaded_tab):
+    from PySide6.QtWidgets import QWidget
+    from shiboken6 import delete
+
+    native_host, view = host
+    window = QWidget.windowHandle(native_host)
+    native_host._export_ready = True
+    native_host.dispose()
+    loaded_tab.dispose()
+    delete(view)
+    # Windows may deliver this notification before the host's deferred deletion.
+    native_host.eventFilter(window, QEvent(QEvent.Expose))
+
+
 def test_disposed_native_canvas_ignores_late_focus_and_resize(qt_app, loaded_tab):
     from PySide6.QtCore import QEvent, QSize, Qt
     from PySide6.QtGui import QFocusEvent, QResizeEvent

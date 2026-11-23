@@ -369,8 +369,9 @@ def test_brush_keeps_qml_layers_alive_during_paint_and_erase(scene, source, tmp_
         app.settingsController.setValue('layout', 'rightPanelWidth', 240)
         window.resize(1280, 720)
         tab.toolController.activateTool('segmentation')
-        QTest.qWait(50)
-        assert find(window, 'segmentationDisplayMode').property('currentIndex') == 2
+        right_panel = find(window, 'rightPanel')
+        wait_until(lambda: right_panel.width() == 240)
+        wait_until(lambda: find(window, 'segmentationDisplayMode').property('currentIndex') == 2)
         assert c.displayMode == 'fill-outline'
         assert find(window, 'segmentationEditMode').property('currentIndex') == 1
         assert c.editMode == 'paint'
@@ -411,7 +412,7 @@ def test_brush_keeps_qml_layers_alive_during_paint_and_erase(scene, source, tmp_
         for widget in (tool, scope, find(window, 'segmentationBrushUnits')):
             caption = widget.property('contentItem')
             assert not caption.property('truncated')
-            assert caption.property('contentWidth') <= caption.width() + 1
+            wait_until(lambda: caption.property('contentWidth') <= caption.width() + 1)
         for name in ('newPaintSegment', 'segmentationUndo', 'segmentationRedo', 'voiEnabled'):
             button = find(window, name)
             x = button.mapToScene(QPointF()).x()
@@ -421,10 +422,10 @@ def test_brush_keeps_qml_layers_alive_during_paint_and_erase(scene, source, tmp_
             assert diameter_label.property('lineCount') == 1
         window.resize(1600, 900)
         app.settingsController.setValue('layout', 'rightPanelWidth', 420)
-        QTest.qWait(50)
-        assert abs(scope.mapToScene(QPointF()).y() - tool.mapToScene(QPointF()).y()) <= 3
+        wait_until(lambda: right_panel.width() == 420
+                   and abs(scope.mapToScene(QPointF()).y() - tool.mapToScene(QPointF()).y()) <= 3)
         app.settingsController.setValue('layout', 'rightPanelWidth', 240)
-        QTest.qWait(50)
+        wait_until(lambda: right_panel.width() == 240)
         assert find(window, 'segmentationUndo').property('iconName') == 'undo'
         opacity_slider = find(window, 'segmentationFillOpacity')
         assert opacity_slider.width() >= 40

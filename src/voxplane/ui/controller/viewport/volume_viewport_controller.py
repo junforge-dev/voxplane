@@ -32,6 +32,7 @@ class VolumeViewportController(ViewportController):
     _i18n_volumePresets = Signal()
 
 
+    exportReadinessChanged = Signal()
     nativeWindowChanged = Signal()
     stateChanged = Signal()
     loadStateChanged = Signal()
@@ -73,14 +74,18 @@ class VolumeViewportController(ViewportController):
         self._crop_mode = "inside"
         self._tools.activeInteractionChanged.connect(self._tool_changed)
 
+    @Property(bool, notify=exportReadinessChanged)
+    def exportReady(self):
+        host = self._host
+        return bool(host and host._active and host.frame_ready and host.surface_ready())
+
     def snapshot_image(self, *, directions=True):
         """Capture the native frame; optional marker suppression never changes reading state."""
         from PySide6.QtGui import QImage
         from vtkmodules.vtkRenderingCore import vtkWindowToImageFilter
         from vtkmodules.util.numpy_support import vtk_to_numpy
         import numpy as np
-        if (self._host is None or self._load_state != "ready" or not self._host.frame_ready
-                or not self._host.surface_ready()):
+        if not self.exportReady:
             raise ValueError(_msg('text.0551'))
         backend = self._host.backend
         window = backend.window

@@ -37,7 +37,8 @@ def test_title_brand_replaces_sidebar_brand_and_compact_collapse(scene, tmp_path
     sidebar = find(window, "sidebarContainer")
     assert sidebar.mapToScene(QPointF()).y() >= header.mapToScene(QPointF(0, header.height())).y()
     click(window, find(window, "sidebarToggle"))
-    assert sidebar.width() == 52 and sidebar.isVisible()
+    assert sidebar.property('collapsed') and sidebar.isVisible()
+    wait_until(lambda: sidebar.width() == 52)
     assert header.height() == (0 if sys.platform == "win32" else 32)
     assert find(window, "sidebarToggle").mapToScene(QPointF()).y() > header.height()
     assert find(window, "sidebarToggle").isVisible()
@@ -45,7 +46,7 @@ def test_title_brand_replaces_sidebar_brand_and_compact_collapse(scene, tmp_path
     click(window, find(window, "sidebarToggle"))
     assert not sidebar.property('collapsed') and sidebar.isVisible()
     expected = 52 if sidebar.property('compactRequired') else min(300, max(200, sidebar.property('availableExpandedWidth')))
-    assert sidebar.width() == expected
+    wait_until(lambda: sidebar.width() == expected)
     assert window.grabWindow().save(str(tmp_path / "voxplane-titlebar.png"))
     assert not warnings, warnings
 

@@ -274,11 +274,8 @@ ColumnLayout {
             Accessible.role: Accessible.StaticText
             Accessible.name: text
             Layout.fillWidth: true
-            text: !panel.ready ? "" : panel.controller?.actualAnalysisMethod === "gaussian_equivalent" ? qsTrId("mtf.usedEquivalent")
-                : panel.controller?.actualAnalysisMethod === "tukey_fft" ? qsTrId("mtf.usedWeighted")
-                : panel.controller?.actualAnalysisMethod === "gaussian" ? qsTrId("mtf.usedGaussian")
-                : panel.controller?.actualAnalysisMethod === "half_height" ? qsTrId("ramp.usedHalfHeight")
-                : qsTrId("mtf.usedDirect")
+            text: panel.controller?.actualMethodText ?? ""
+            textFormat: Text.PlainText
             color: Theme.textSecondary
             font.pixelSize: 11
             wrapMode: Text.Wrap
@@ -288,7 +285,7 @@ ColumnLayout {
     AnalysisInfoPopup {
         id: infoPopup
         anchorItem: infoButton
-        explanation: [panel.rampMode ? qsTrId("ramp.info") : panel.controller?.calculationDetails || qsTrId("mtf.emptyDetails"),
+        explanation: [panel.controller?.calculationDetails || (panel.rampMode ? qsTrId("ramp.profileInfo") : qsTrId("mtf.emptyDetails")),
             panel.controller?.provenance ?? "", panel.rampMode ? qsTrId("analysis.savedHint") : ""]
             .filter(part => part.trim().length > 0).join("\n\n")
         warnings: panel.qualityWarnings

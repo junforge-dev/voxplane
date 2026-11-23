@@ -1,7 +1,6 @@
 from voxplane.i18n import message as _msg
 import os
 from collections import OrderedDict
-from datetime import date, datetime, time, timedelta
 from math import exp, isfinite, log
 from pathlib import Path
 from typing import Any
@@ -11,10 +10,12 @@ import pydicom
 from pydicom import FileDataset
 from pydicom.multival import MultiValue
 from pydicom.pixels import apply_modality_lut
-from voxplane.core.ct import validate_ct_dataset
+from voxplane.core.ct import classic_ct_value_meta, validate_ct_dataset
 from voxplane.core.enhanced_frames import is_enhanced_ct
-from voxplane.core.mr import automatic_mr_window, read_mr_parameters, validate_mr_dataset
-from pydicom.valuerep import DA, DT, TM
+from voxplane.core.mr import MR_MINIMUM_WINDOW, automatic_mr_window, read_mr_parameters, validate_mr_dataset
+from voxplane.core.pet_timing import (
+    dataset_utc_offset, pet_scan_start, radiopharmaceutical_start_datetime, scan_start_key,
+)
 
 from voxplane.model import (
     DicomLoadResult,
@@ -39,6 +40,39 @@ def _optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def source_voi(dataset, *, numeric_range=False) -> tuple[WindowLevel | None, str]:
+    """Return a valid source WC/WW pair and its DICOM window function."""
+    center = _optional_float(getattr(dataset, "WindowCenter", None))
+    width = _optional_float(getattr(dataset, "WindowWidth", None))
+    function = str(getattr(dataset, "VOILUTFunction", "LINEAR")).strip().upper()
+    # Legacy MR data sometimes supplies a fractional width without a
+    # function. Preserve its continuous range, since DICOM LINEAR requires w >= 1.
+    if numeric_range or ("VOILUTFunction" not in dataset and width is not None
+                         and width < 1 and str(dataset.get("Modality", "")).upper() == "MR"):
+        function = "LINEAR_EXACT"
+    elif function not in ("SIGMOID", "LINEAR_EXACT"):
+        function = "LINEAR"
+    if (center is None or width is None or not isfinite(center) or not isfinite(width)
+            or width <= 0 or (function == "LINEAR" and width < 1)):
+        return None, "LINEAR_EXACT"
+    return WindowLevel(center, width), function
+
+
+def _ct_needs_numeric_window(dataset):
+    if str(dataset.get("Modality", "")).upper() != "CT":
+        return False
+    if is_enhanced_ct(dataset):
+        # Enhanced CT VOI is applied before the real-world value mapping.
+        return str(dataset.get("RescaleType", "")).upper() != "HU"
+    return classic_ct_value_meta(dataset).unit != "HU"
+
+
+def _continuous_width_limit(dataset, source_window):
+    if _ct_needs_numeric_window(dataset):
+        return min(MR_MINIMUM_WINDOW, source_window.width) if source_window else MR_MINIMUM_WINDOW
+    return source_window.width if source_window else None
 
 
 def _optional_int(value: Any) -> int | None:
@@ -99,65 +133,6 @@ def _string_values(value: Any) -> tuple[str, ...]:
         return (text,) if text else ()
 
 
-def _parse_dicom_datetime(value: Any) -> datetime | None:
-    text = _optional_str(value)
-    if text is None:
-        return None
-    try:
-        parsed = DT(text)
-    except (TypeError, ValueError):
-        return None
-    return parsed if isinstance(parsed, datetime) else None
-
-
-def _parse_dicom_date(value: Any) -> date | None:
-    text = _optional_str(value)
-    if text is None:
-        return None
-    try:
-        parsed = DA(text)
-    except (TypeError, ValueError):
-        return None
-    return parsed if isinstance(parsed, date) else None
-
-
-def _parse_dicom_time(value: Any) -> time | None:
-    text = _optional_str(value)
-    if text is None:
-        return None
-    try:
-        parsed = TM(text)
-    except (TypeError, ValueError):
-        return None
-    return parsed if isinstance(parsed, time) else None
-
-
-def _combine_datetime(date_value: Any, time_value: Any) -> datetime | None:
-    parsed_date = _parse_dicom_date(date_value)
-    parsed_time = _parse_dicom_time(time_value)
-    if parsed_date is None or parsed_time is None:
-        return None
-    return datetime.combine(parsed_date, parsed_time)
-
-
-def _acquisition_datetime(dataset: FileDataset) -> datetime | None:
-    parsed = _parse_dicom_datetime(
-        getattr(dataset, "AcquisitionDateTime", None)
-    )
-    if parsed is not None:
-        return parsed
-    parsed = _combine_datetime(
-        getattr(dataset, "AcquisitionDate", None),
-        getattr(dataset, "AcquisitionTime", None),
-    )
-    if parsed is not None:
-        return parsed
-    return _combine_datetime(
-        getattr(dataset, "SeriesDate", None),
-        getattr(dataset, "SeriesTime", None),
-    )
-
-
 def _radiopharmaceutical_item(dataset: FileDataset):
     sequence = getattr(
         dataset,
@@ -167,38 +142,6 @@ def _radiopharmaceutical_item(dataset: FileDataset):
     if sequence is None or len(sequence) != 1:
         return None
     return sequence[0]
-
-
-def _radiopharmaceutical_start_datetime(
-    item: Any,
-    acquisition: datetime,
-) -> datetime | None:
-    parsed = _parse_dicom_datetime(
-        getattr(item, "RadiopharmaceuticalStartDateTime", None)
-    )
-    if parsed is not None:
-        return parsed
-
-    parsed_time = _parse_dicom_time(
-        getattr(item, "RadiopharmaceuticalStartTime", None)
-    )
-    if parsed_time is None:
-        return None
-    parsed = datetime.combine(acquisition.date(), parsed_time)
-    if parsed > acquisition.replace(tzinfo=None):
-        parsed -= timedelta(days=1)
-    return parsed
-
-
-def _comparable_datetimes(
-    first: datetime,
-    second: datetime,
-) -> tuple[datetime, datetime]:
-    first_aware = first.utcoffset() is not None
-    second_aware = second.utcoffset() is not None
-    if first_aware != second_aware:
-        return first.replace(tzinfo=None), second.replace(tzinfo=None)
-    return first, second
 
 
 def _suv_unit(suv_type: str | None) -> tuple[str, str]:
@@ -270,6 +213,7 @@ class DicomLoader:
         instance_path: Path,
         render_request: RenderRequest,
         frame_index: int | None = None,
+        pet_series_start: str | None = None,
     ) -> DicomLoadResult | None:
         dataset, pixels = self.read_frame(instance_path, frame_index)
 
@@ -279,6 +223,7 @@ class DicomLoader:
             inverted=render_request.inverted,
             preferred_unit=getattr(render_request, "value_unit", None),
             modality_pixels=pixels,
+            pet_series_start=pet_series_start,
         )
 
     def read_frame(self, instance_path, frame_index=None):
@@ -333,6 +278,7 @@ class DicomLoader:
         inverted: bool,
         preferred_unit: str | None = None,
         modality_pixels: np.ndarray | None = None,
+        pet_series_start: str | None = None,
     ) -> DicomLoadResult:
         """Load one source DICOM frame and prepare its display result."""
         from voxplane.core.color_image import is_color, color_pixels
@@ -358,6 +304,7 @@ class DicomLoader:
                 dataset,
                 modality_pixels,
                 preferred_unit=preferred_unit,
+                pet_series_start=pet_series_start,
             )
         )
         modality = (
@@ -393,11 +340,13 @@ class DicomLoader:
             pixel_value_meta=pixel_value_meta,
             value_scale=value_scale,
         )
+        instance_meta = self.extract_instance_meta(dataset)
         image = self.apply_window(
             modality_pixels=window_pixels,
             target_window=effective_window,
             inverted=inverted ^ (modality == "MR" and getattr(dataset, "PhotometricInterpretation", "") == "MONOCHROME1"),
-            minimum_width=minimum_width,
+            minimum_width=instance_meta.minimum_window_width(minimum_width),
+            voi_lut_function=instance_meta.voi_lut_function,
         )
 
         return DicomLoadResult(
@@ -408,7 +357,7 @@ class DicomLoader:
             supplemental_overlay=overlay,
             source_palette=source_palette(dataset) if ct_source else None,
             modality_pixel=display_pixels,
-            instance_meta=self.extract_instance_meta(dataset),
+            instance_meta=instance_meta,
             pixel_value_meta=pixel_value_meta,
         )
 
@@ -460,6 +409,7 @@ class DicomLoader:
         modality_pixels: np.ndarray,
         *,
         preferred_unit: str | None = None,
+        pet_series_start: str | None = None,
     ) -> tuple[np.ndarray, PixelValueMeta, float]:
         modality = (_optional_str(getattr(dataset, "Modality", None)) or "").upper()
         if modality == "CT":
@@ -467,7 +417,7 @@ class DicomLoader:
                 from voxplane.core.ct_display import quantitative_values
                 values, meta = quantitative_values(dataset, modality_pixels)
                 return values, meta, 1.0
-            return modality_pixels, PixelValueMeta(unit="HU", source_unit="HU"), 1.0
+            return modality_pixels, classic_ct_value_meta(dataset), 1.0
         if modality == "MR":
             source_unit = _optional_str(getattr(dataset, "RescaleType", None))
             unit = source_unit if source_unit and source_unit.upper() not in ("US", "UNSPECIFIED") else "a.u."
@@ -502,7 +452,7 @@ class DicomLoader:
             ), 1.0
 
         if units == "BQML":
-            scale, warning = DicomLoader._suvbw_scale(dataset)
+            scale, warning = DicomLoader._suvbw_scale(dataset, pet_series_start)
             options = (
                 PixelUnitOption(
                     unit_id="source",
@@ -580,6 +530,7 @@ class DicomLoader:
     @staticmethod
     def _suvbw_scale(
         dataset: FileDataset,
+        pet_series_start: str | None,
     ) -> tuple[float | None, str | None]:
         if (
             getattr(dataset, "RescaleSlope", None) is None
@@ -618,36 +569,31 @@ class DicomLoader:
         total_dose_bq = _optional_float(
             getattr(item, "RadionuclideTotalDose", None)
         )
-        half_life_seconds = _optional_float(
-            getattr(item, "RadionuclideHalfLife", None)
-        )
         if total_dose_bq is None or total_dose_bq <= 0:
             return None, _msg('text.0069')
-        if half_life_seconds is None or half_life_seconds <= 0:
-            return None, _msg('text.0070')
-
-        acquisition = _acquisition_datetime(dataset)
-        if acquisition is None:
-            return None, _msg('text.0071')
-        administration = _radiopharmaceutical_start_datetime(
-            item,
-            acquisition,
-        )
-        if administration is None:
-            return None, _msg('text.0072')
-        acquisition, administration = _comparable_datetimes(
-            acquisition,
-            administration,
-        )
-        elapsed_seconds = (acquisition - administration).total_seconds()
-        if not isfinite(elapsed_seconds) or elapsed_seconds < 0:
-            return None, _msg('text.0073')
 
         corrected_dose_bq = total_dose_bq
         if decay_correction == "START":
-            corrected_dose_bq *= exp(
-                -log(2.0) * elapsed_seconds / half_life_seconds
-            )
+            half_life_seconds = _optional_float(item.get("RadionuclideHalfLife"))
+            if half_life_seconds is None or not isfinite(half_life_seconds) or half_life_seconds <= 0:
+                return None, _msg('text.0070')
+            try:
+                offset = dataset_utc_offset(dataset)
+                scan_start = pet_scan_start(dataset, offset, check_all_beds=pet_series_start is not None)
+                if scan_start is None or (
+                    pet_series_start is not None and scan_start_key(scan_start) != pet_series_start
+                ):
+                    return None, _msg("pet.scanStartUnavailable")
+                administration = radiopharmaceutical_start_datetime(item, scan_start, offset)
+                if administration is None:
+                    return None, _msg('text.0072')
+                elapsed_seconds = (scan_start - administration).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                # An explicit UTC offset cannot be compared to an unknown one.
+                return None, _msg("pet.scanStartUnavailable")
+            if elapsed_seconds < 0:
+                return None, _msg('text.0073')
+            corrected_dose_bq *= exp(-log(2.0) * elapsed_seconds / half_life_seconds)
         if not isfinite(corrected_dose_bq) or corrected_dose_bq <= 0:
             return None, _msg('text.0074')
 
@@ -672,6 +618,11 @@ class DicomLoader:
             if modality in ("PT", "MR")
             else 1.0
         )
+        source_window, function = source_voi(dataset, numeric_range=modality == "PT")
+        if function == "LINEAR":
+            minimum_width = max(minimum_width, 1.0)
+        elif modality != "PT":
+            minimum_width = min(minimum_width, _continuous_width_limit(dataset, source_window) or minimum_width)
         if target_window is not None:
             if modality == "PT":
                 upper = max(
@@ -685,15 +636,8 @@ class DicomLoader:
                 minimum_width=minimum_width,
             )
 
-        center = _optional_float(
-            getattr(dataset, "WindowCenter", None)
-        )
-        width = _optional_float(
-            getattr(dataset, "WindowWidth", None)
-        )
-
-        if (center is not None and width is not None
-                and (modality != "MR" or (isfinite(center) and isfinite(width) and width >= minimum_width))):
+        if source_window is not None:
+            center, width = source_window.center, source_window.width
             if modality == "PT":
                 upper = (center + width / 2.0) * value_scale
                 if isfinite(upper) and upper > minimum_width:
@@ -731,8 +675,7 @@ class DicomLoader:
             # lower bound and misleading WL/WW semantics.
             return WindowLevel(center=0.5, width=1.0)
 
-        if modality == "MR" or (modality == "CT" and is_enhanced_ct(dataset)
-                and str(getattr(dataset, "RescaleType", "")).upper() != "HU"):
+        if modality == "MR" or _ct_needs_numeric_window(dataset):
             return automatic_mr_window(modality_pixels if modality_pixels is not None else np.array([]))
 
         return DicomLoader.normalize_window(
@@ -757,6 +700,8 @@ class DicomLoader:
         target_window: WindowLevel,
         inverted: bool,
         minimum_width: float = 1.0,
+        *,
+        voi_lut_function: str = "LINEAR_EXACT",
     ) -> np.ndarray:
         """Window any modality-valued 2D array, source stack or MPR plane."""
         effective_window = DicomLoader.normalize_window(
@@ -766,37 +711,38 @@ class DicomLoader:
         window_center = effective_window.center
         window_width = effective_window.width
 
-        lower = window_center - window_width / 2
-        upper = window_center + window_width / 2
-
-        source_pixels = np.asarray(
-            modality_pixels,
-            dtype=np.float32,
-        )
+        source_pixels = np.asarray(modality_pixels, dtype=np.float64)
         valid_pixels = np.isfinite(source_pixels)
-        displayed = np.clip(
-            source_pixels,
-            lower,
-            upper,
-        )
-        displayed = (displayed - lower) / (upper - lower)
-        if inverted:
-            displayed = 1.0 - displayed
-        displayed = np.where(
-            valid_pixels,
-            displayed,
-            0.0,
-        )
-
-        image_8bit = (displayed * 255).astype(np.uint8)
-        return np.ascontiguousarray(image_8bit)
+        delta = source_pixels - window_center
+        if voi_lut_function == "LINEAR" and window_width <= 1:
+            gray = np.where((delta > -0.5) ^ inverted, 255, 0)
+        elif voi_lut_function == "SIGMOID":
+            exponent = np.clip((4 if inverted else -4) * delta / window_width, -80, 80)
+            gray = 255.0 / (1.0 + np.exp(exponent))
+        else:
+            span = window_width
+            if voi_lut_function == "LINEAR":
+                span -= 1
+                delta += 0.5
+            # Scale the distance from the lower endpoint directly in gray
+            # levels so an 8-bit identity window preserves every integer.
+            distance = span / 2 - delta if inverted else span / 2 + delta
+            gray = np.clip(distance, 0, span) * 255 / span
+        return np.ascontiguousarray(np.where(valid_pixels, gray, 0), dtype=np.uint8)
 
     @staticmethod
     def extract_instance_meta(
         dataset: FileDataset,
     ) -> InstanceDisplayMeta:
         radiopharmaceutical_item = _radiopharmaceutical_item(dataset)
+        window, function = source_voi(dataset)
+        # PET's viewer range is rebuilt in the selected unit from zero to
+        # an upper bound. It is independent of the source VOI shape.
+        if str(getattr(dataset, "Modality", "")).upper() == "PT":
+            window, function = None, "LINEAR_EXACT"
         return InstanceDisplayMeta(
+            voi_lut_function=function,
+            continuous_width_limit=_continuous_width_limit(dataset, window),
             mr_parameters=read_mr_parameters(dataset),
             frame_index=getattr(dataset, "_voxplane_frame_index", None),
             photometric_interpretation=str(getattr(dataset, "PhotometricInterpretation", "")),

@@ -92,8 +92,12 @@ def main():
                 yield from children(child)
 
         def click(name):
-            button = next(item for item in children(root.contentItem())
-                          if item.objectName() == name and item.isVisible())
+            def visible_button():
+                return next((item for item in children(root.contentItem())
+                             if item.objectName() == name and item.isVisible()), None)
+
+            until(visible_button)
+            button = visible_button()
             assert button.isEnabled(), name
             QTest.mouseClick(root, Qt.LeftButton, pos=button.mapToScene(
                 QPointF(button.width()/2, button.height()/2)).toPoint())
@@ -119,6 +123,9 @@ def main():
             workspace.createFusionTab(ct.series_instance_uid, pet.series_instance_uid)
             source = workspace.activeTab
             until(lambda: source.ready)
+            pump()
+            until(lambda: sum(item.objectName() == "dicomPixelLayer" and item.isVisible()
+                              for item in children(root.contentItem())) == 4)
             pump()
             root.grabWindow().save(str(output / "four-pane.png"))
             click("openFusion3D")

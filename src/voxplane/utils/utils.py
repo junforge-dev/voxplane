@@ -70,7 +70,7 @@ def _display_text(value: str | None) -> str:
     return text or "--"
 
 
-def _display_number(value: float | int | None, precision: int = 2) -> str:
+def _display_number(value: float | int | None, precision: int | None = 2) -> str:
     if value is None:
         return "--"
     number = float(value)
@@ -78,5 +78,7 @@ def _display_number(value: float | int | None, precision: int = 2) -> str:
         return "--"
     if number.is_integer():
         return str(int(number))
+    if precision is None:
+        return str(number)
     text = f"{number:.{precision}f}"
     return text.rstrip("0").rstrip(".") if precision > 0 else text

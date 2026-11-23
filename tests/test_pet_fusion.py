@@ -78,6 +78,11 @@ def paired_series(tmp_path):
             ds.FrameOfReferenceUID = reference
             ds.ImagePositionPatient = [0, 0, z * 2]
             ds.InstanceNumber = z + 1
+            if modality == "PT":
+                ds.SeriesType = ["WHOLE BODY", "IMAGE"]
+                ds.SeriesDate = "20240101"
+                ds.SeriesTime = "130000"
+                ds.AcquisitionDateTime = f"2024010113{z * 10:02d}00"
             if modality == "CT":
                 ds.SOPClassUID = CTImageStorage
                 ds.file_meta.MediaStorageSOPClassUID = CTImageStorage
@@ -87,6 +92,40 @@ def paired_series(tmp_path):
     catalog = SeriesCatalog()
     catalog.update(DicomFolderScanSnapshot(tmp_path, 6, 6, 0, records))
     return catalog, records[0], records[1]
+
+
+@pytest.mark.parametrize("issue", ["between_beds", "different_starts"])
+def test_inconsistent_whole_body_reference_downgrades_all_beds_and_volume(paired_series, issue):
+    from voxplane.model import StackRenderRequest
+    from voxplane.ui.workers.dicom_render_worker import DicomRenderWorker
+
+    catalog, ct, pet = paired_series
+    instances = []
+    for z, instance in enumerate(pet.instances):
+        ds = pydicom.dcmread(instance.path)
+        ds.SeriesTime = "130500" if issue == "between_beds" else f"13{z * 10:02d}00"
+        _write_dataset(ds, instance.path)
+        instances.append(_read_instance(instance.path))
+    pet = _build_series_record(instances)
+    catalog.update(DicomFolderScanSnapshot(pet.first_file.parent, 6, 6, 0, [ct, pet]))
+    volumes = VolumeManager()
+    worker = DicomRenderWorker(catalog, volumes)
+    results = []
+    worker.render_finished.connect(results.append)
+    for z in range(3):
+        worker.handleRenderRequest(StackRenderRequest(
+            request_id=f"bed-{z}", viewport_id="stack", series_uid=pet.series_instance_uid,
+            slice_index=z, window=None, inverted=False, value_unit="suvbw",
+        ))
+    assert len(results) == 3
+    for z, result in enumerate(results):
+        assert result.frame_meta.pixel_value_meta.unit == "Bq/ml"
+        assert result.frame_meta.pixel_value_meta.warning
+        assert result.modality_pixel[1, 2] == 1000 * (z + 1)
+    volume = volumes.get_or_build(pet)
+    assert volume.pixel_value_meta.unit == "Bq/ml"
+    assert not next(o for o in volume.pixel_value_meta.unit_options if o.unit_id == "suvbw").available
+    np.testing.assert_array_equal(volume.modality_pixels[:, 1, 2], [1000, 2000, 3000])
 
 
 def test_fusion_reconstructs_linked_planes_and_mip(paired_series):

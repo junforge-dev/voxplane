@@ -164,7 +164,7 @@ try:
     assert status.mapToScene(QPointF(0, status.height())).y() <= window.height()
     screenshot("freehand-to-segmentation")
     tab.toolController.activateTool("export")
-    window.resize(1000, 600)
+    window.resize(window.minimumWidth(), window.minimumHeight())
     app.settingsController.setValue("layout", "rightPanelWidth", 260)
     QTest.qWait(100)
     with patch(

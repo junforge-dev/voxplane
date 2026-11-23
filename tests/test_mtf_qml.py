@@ -519,6 +519,47 @@ def test_ramp_metrics_profile_and_explicit_angle_recalculation(workspace, tmp_pa
     assert not warnings, warnings
 
 
+def test_fwhm_details_show_the_recorded_method_including_restored_fallback(workspace):
+    from voxplane.core.workspace_state import dumps, loads
+    from voxplane.i18n.messages import builtin
+
+    view, controller, pixels, warnings = workspace
+    c = controller.fwhmController
+    controller._tool_controller.selectService('service:fwhm')
+    labels = builtin()['messages']
+
+    def check_method(actual, used_key):
+        wait_result(c)
+        assert c.stateSnapshot['status'] == 'ready'
+        assert c.stateSnapshot['actualMethod'] == actual
+        assert _find(view, 'mtfActualMethod').property('text') == labels[used_key]
+        _click(view, _find(view, 'mtfInfoButton'))
+        explanation = next(item for item in _visual_children(view.contentItem())
+                           if item.objectName() == 'mtfInfoExplanation' and item.isVisible())
+        assert explanation.property('text').splitlines()[0] == labels[used_key]
+        QTest.keyClick(view, Qt.Key_Escape)
+
+    _mouse_drag(view, _scene(pixels, 25, 60), _scene(pixels, 102, 67))
+    check_method('half_height', 'ramp.usedHalfHeight')
+    _click(view, _find(view, 'rampDetailsToggle'))
+    _click(view, _find(view, 'mtfAnalysisMethod-gaussian'))
+    check_method('gaussian', 'mtf.usedGaussian')
+    # A cropped rising profile has no right crossing. Gaussian fitting never ran.
+    c.reset()
+    c.setRampDirection('y')
+    _mouse_drag(view, _scene(pixels, 60, 30), _scene(pixels, 67, 63))
+    check_method('half_height', 'ramp.usedHalfHeight')
+    assert c.stateSnapshot['requestedMethod'] == 'gaussian' and c.currentResult['ramp']['fwhm'] is None
+    saved = loads(dumps(c.persistent_state()))
+    next(iter(saved['records'].values())).pop('presented')
+    c.reset()
+    c.setAnalysisMethod('direct_fft')
+    c.restore_state(saved)
+    check_method('half_height', 'ramp.usedHalfHeight')
+    assert c.stateSnapshot['requestedMethod'] == 'gaussian'
+    assert not warnings, warnings
+
+
 def test_mtf_and_fwhm_entries_preserve_independent_ui_state(workspace, tmp_path):
     view, controller, pixels, warnings = workspace
     controller._tool_controller.selectService('service:mtf')

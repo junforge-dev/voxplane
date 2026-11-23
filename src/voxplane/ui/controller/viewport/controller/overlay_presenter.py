@@ -86,6 +86,10 @@ class OverlayPresenter:
         instance = frame.instance_meta if frame else None
         value_meta = frame.pixel_value_meta if frame else None
         window_precision = 3 if series.modality.upper() == "MR" else 2 if value_meta and value_meta.is_suv else 0
+        if instance and series.modality.upper() in ("CT", "MR"):
+            usual_minimum = 0.001 if series.modality.upper() == "MR" else 1.0
+            if instance.minimum_window_width(usual_minimum) < usual_minimum:
+                window_precision = None
         pet_value_precision = (
             3
             if value_meta and value_meta.unit in {"SUVbw", "kBq/ml"}

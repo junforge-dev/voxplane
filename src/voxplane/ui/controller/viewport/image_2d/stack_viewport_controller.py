@@ -2,6 +2,7 @@ import logging
 import uuid
 from dataclasses import replace
 from PySide6.QtCore import Slot
+from PySide6.QtGui import QGuiApplication
 
 from voxplane.model import (
     RenderRequest,
@@ -35,7 +36,17 @@ class StackViewportController(Image2DViewportController):
         super().__init__(viewport_config, tool_controller, parent)
         self._mtf_controller = MtfController(self)
         self._fwhm_controller = FwhmController(self)
-        self._qa_controller = WaterQaController(viewport_config.series_meta.modality, self)
+        self._qa_controller = WaterQaController(
+            viewport_config.series_meta.modality, self,
+            supports_ct_analysis=viewport_config.series_meta.supports_ct_analysis)
+        for signal in (self.renderRequested, self.loadStateChanged, self.imageDimensionChanged,
+                       self.activeInteractionChanged, self._measure_controller.activeTransactionChanged,
+                       self._mtf_controller.roiController.activeTransactionChanged,
+                       self._fwhm_controller.roiController.activeTransactionChanged,
+                       self._qa_controller.stateChanged, self._text_annotation_controller.annotationsChanged):
+            signal.connect(self.roiPasteStateChanged)
+        if isinstance(QGuiApplication.instance(), QGuiApplication):
+            QGuiApplication.clipboard().dataChanged.connect(self.roiPasteStateChanged)
         owner = self.workspaceTab
         if owner is not None:
             for service in (self._mtf_controller, self._fwhm_controller, self._qa_controller):
@@ -130,6 +141,11 @@ class StackViewportController(Image2DViewportController):
             raise ValueError("Stack render result has an invalid view type")
 
     def _apply_specific_render_result(self, result: RenderResult) -> None:
+        if (not self._qa_controller.available
+                or result.frame_meta.pixel_value_meta.unit not in ("", "HU")):
+            for controller in (self._mtf_controller, self._fwhm_controller, self._qa_controller):
+                controller.set_current_slice(result.frame_meta.slice_index)
+            return
         self._mtf_controller.set_frame(result.series_uid, result.frame_meta, result.modality_pixel)
         self._fwhm_controller.set_frame(result.series_uid, result.frame_meta, result.modality_pixel)
         self._qa_controller.set_frame(result.series_uid, result.frame_meta, result.modality_pixel)

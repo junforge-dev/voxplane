@@ -42,7 +42,9 @@ def test_palette_uses_stored_domain_and_keeps_gray_voi(tmp_path):
         mask = stored >= 30
         palette = np.array([[0,255,0],[255,0,0],[0,0,255]],np.uint8)
         np.testing.assert_array_equal(result.image[mask],palette[np.clip(stored[mask]-30,0,2)])
-        gray = DicomLoader.apply_window(pixels,window,inverted)
+        # DICOM LINEAR subtracts 0.5 from the center and one from the width.
+        level = np.clip((pixels - (window.center - .5)) / (window.width - 1) + .5, 0, 1)
+        gray = ((1 - level if inverted else level) * 255).astype(np.uint8)
         np.testing.assert_array_equal(result.image[~mask],np.repeat(gray[~mask,None],3,axis=1))
     image = frame_image(stored,d,0)
     assert image.pixelColor(6,3).getRgb()[:3] == (0,255,0) # stored=30

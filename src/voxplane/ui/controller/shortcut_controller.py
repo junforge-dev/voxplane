@@ -128,6 +128,10 @@ class ShortcutController(QObject):
                      or (visible_menu is not None and visible_menu != target_menu)
                      or tab.playing):
             return False
+        if action == 'paste-roi-in-place':
+            view = tab.activeViewport
+            return bool(not tab.playing and getattr(view, 'viewportType', '') == 'stack'
+                        and view.pasteRoiInPlace())
         if action == 'reset':
             view = tab.activeViewport
             if (view is None or tab.playing or getattr(view, 'editBusy', False)

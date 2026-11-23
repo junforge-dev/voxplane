@@ -22,9 +22,15 @@ COLUMNS = (
     ("reference_status", _msg("report.referenceStatus")),
 )
 
+FWHM_COLUMNS = (
+    ("fwhm_mm", "FWHM (mm)"), ("slice_thickness_mm", _msg("ramp.reportThickness")),
+    ("profile_direction", _msg("ramp.direction")), ("actual_method", _msg("mtf.details")),
+    ("profile_warnings", _msg("ramp.reportWarnings")),
+)
 
 MEASUREMENT_COLUMNS = frozenset({"length_mm", "angle_deg", "width_mm", "height_mm", "area_mm2",
-                                 "perimeter_mm", "volume_cm3", "mean", "std", "minimum", "maximum", "threshold"})
+                                 "perimeter_mm", "volume_cm3", "mean", "std", "minimum", "maximum", "threshold",
+                                 "fwhm_mm", "slice_thickness_mm"})
 
 
 def cell(value, *, decimal_places=None):
@@ -41,12 +47,15 @@ def cell(value, *, decimal_places=None):
 
 def csv_bytes(rows, *, translations=None, decimal_places=DEFAULT_DECIMAL_PLACES):
     translations = snapshot() if translations is None else translations
-    rows = localize(rows, translations)
+    rows = localize(list(rows), translations)
+    columns = COLUMNS + FWHM_COLUMNS if any("actual_method" in row for row in rows) else COLUMNS
     output = io.StringIO(newline="")
     writer = csv.writer(output)
-    writer.writerow([localize(label, translations) for _, label in COLUMNS])
+    writer.writerow([localize(label, translations) for _, label in columns])
     for row in rows:
-        writer.writerow([cell(row.get(key), decimal_places=decimal_places if key in MEASUREMENT_COLUMNS else None) for key, _ in COLUMNS])
+        if "profile_warnings" in row:
+            row["profile_warnings"] = " | ".join(row["profile_warnings"])
+        writer.writerow([cell(row.get(key), decimal_places=decimal_places if key in MEASUREMENT_COLUMNS else None) for key, _ in columns])
     return output.getvalue().encode("utf-8-sig")
 
 
@@ -124,8 +133,15 @@ def pdf_bytes(rows, *, anonymous=True, images=(), created=None, translations=Non
         for row in rows:
             metrics = [(localize(label, translations), cell(row.get(key), decimal_places=decimal_places if key in MEASUREMENT_COLUMNS else None)) for key, label in (*COLUMNS[9:22], COLUMNS[-3])
                        if row.get(key) is not None and row.get(key) != ""]
+            if "actual_method" in row:
+                for key, label in FWHM_COLUMNS[:3]:
+                    value = cell(row.get(key), decimal_places=decimal_places if key in MEASUREMENT_COLUMNS else None)
+                    metrics.append((localize(label, translations), value or "—"))
             lines = ["  ·  ".join(f"{label}: {value}" for label, value in metrics[i:i+2])
                      for i in range(0, len(metrics), 2)]
+            if "actual_method" in row:
+                lines.append(row["actual_method"])
+                lines.extend(row["profile_warnings"])
             if row.get("reference_status"):
                 lines.append(row["reference_status"])
             if row.get("text"):

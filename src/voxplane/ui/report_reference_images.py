@@ -44,7 +44,8 @@ def render_references(pictures, catalog, cancelled, progress):
                     slice_index=cpr["frameIndex"], slice_count=cpr["frameCount"]))
             actual = frame_identity(result.series_uid, result.frame_meta,
                 getattr(result, "projection_mode", None), getattr(result, "slab_thickness_mm", 0.),
-                phase=getattr(result, "phase_identifier", None))
+                phase=getattr(result, "phase_identifier", None),
+                include_source_spacing=picture["source"].get("verifySourceSpacing", False))
             if actual != picture["frame"]:
                 raise ValueError(_msg("analysis.sourceMismatch"))
             if cpr is None and picture["source"].get("pixelFingerprint"):

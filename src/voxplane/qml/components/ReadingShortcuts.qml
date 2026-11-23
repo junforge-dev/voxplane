@@ -60,6 +60,8 @@ Item {
                 context: Qt.WindowShortcut
                 autoRepeat: false
                 enabled: root.foreground && bindingItem.modelData.sequence.length > 0
+                    && (bindingItem.modelData.action !== "paste-roi-in-place"
+                        || (!root.tabController?.playing && root.viewportController?.roiPasteUnavailableReason === ""))
                     && !root.controller?.recordingAction
                     && !(root.controlFocused && bindingItem.modelData.sequence === "Space")
                     && (bindingItem.modelData.menu
@@ -71,7 +73,7 @@ Item {
                     if (binding.listIndex >= 0) {
                         if (!root.tabController?.playing && root.controller.pointerIdle())
                             root.listPanel.selectShortcutIndex(binding.listIndex)
-                    } else if (!binding.menu && !["play", "reset"].includes(binding.action)) {
+                    } else if (!binding.menu && !["play", "reset", "paste-roi-in-place"].includes(binding.action)) {
                         if (root.tabController?.playing || root.tabController?.activeViewport?.editBusy) return
                         const tool = root.controller.primaryToolFor(binding.action, root.toolController)
                         if (tool) root.primaryToolRequested(tool)

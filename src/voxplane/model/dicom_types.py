@@ -96,6 +96,13 @@ class InstanceDisplayMeta:
     mr_parameters: MrParameters | None = None
     photometric_interpretation: str = ""
     frame_index: int | None = None
+    voi_lut_function: str = "LINEAR_EXACT"
+    continuous_width_limit: float | None = None
+
+    def minimum_window_width(self, default: float) -> float:
+        if self.voi_lut_function == "LINEAR":
+            return max(default, 1.0)
+        return min(default, self.continuous_width_limit or default)
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +118,9 @@ class FrameDisplayMeta:
     supplemental_overlay: np.ndarray | None = field(default=None, compare=False, repr=False)
     source_palette: SourcePalette | None = field(default=None, compare=False, repr=False)
     automatic_window: WindowLevel | None = None
+
+    stack_phase: tuple[tuple[str, int | float | str], ...] | None = ()
+    frame_of_reference_uid: str = ""
 
 
 @dataclass(frozen=True, slots=True)

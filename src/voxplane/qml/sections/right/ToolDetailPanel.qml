@@ -236,7 +236,7 @@ Rectangle {
     Component {
         id: petRegistrationComponent
         Panels.PetRegistrationPanel {
-            controller: detailPanel.viewportController.reconstructionController
+            controller: detailPanel.viewportController?.reconstructionController ?? null
         }
     }
 
@@ -319,6 +319,7 @@ Rectangle {
     Component {
         id: measureComponent
         Panels.MeasurePanel {
+            playing: detailPanel.tabController?.playing ?? false
             maximumPanelHeight: Math.max(0, detailPanel.availableHeight - 24)
             resultsController: detailPanel.tabController?.measurementResults ?? null
             dicomResults: detailPanel.exportController?.dicomResults ?? null

@@ -47,8 +47,10 @@ class AppController(QObject):
         self._appearance_controller = AppearanceController(self._settings_controller, self)
         language_root = Path(settings_path).parent / "languages" if settings_path else (False if settings_path is False else None)
         self._language_controller = LanguageController(self._settings_controller, self, root=language_root)
-        self._series_export_controller = SeriesExportController(self._series_catalog, self._settings_controller, self)
         self._workspace_controller = WorkspaceController(self._series_catalog,self._image_provider,parent= self)
+        self._series_export_controller = SeriesExportController(
+            self._series_catalog, self._settings_controller, self,
+            image_provider=image_provider, workspace=self._workspace_controller)
         self._panel_controller = PanelController(parent=self, series_catalog=self._series_catalog, image_provider=image_provider,
             import_blocker=lambda: self._series_import_blocker("local"),
             favorite_path=(self._settings_controller._path.with_name("favorite-directories.json")

@@ -131,6 +131,7 @@ class VolumeViewportHost(QWidget):
         self._interactive = False
         self._prepared_key = None
         self._presented_key = None
+        self._export_ready = False
         self._preparing_key = None
         self._prepare_token = 0
         self._prepare_task = None
@@ -250,6 +251,13 @@ class VolumeViewportHost(QWidget):
             self._timer.stop()
             self._settle.stop()
             self.hide()
+        self._update_export_readiness()
+
+    def _update_export_readiness(self):
+        ready = self.controller.exportReady
+        if ready != self._export_ready:
+            self._export_ready = ready
+            self.controller.exportReadinessChanged.emit()
 
     def _set_wait_feedback(self, waiting):
         waiting = bool(waiting and self._active and not self._disposed)
@@ -264,6 +272,7 @@ class VolumeViewportHost(QWidget):
     def sync_status(self):
         if self._disposed:
             return
+        self._update_export_readiness()
         if self.controller.loadState == "ready":
             key = self.backend.preparation_key(self.controller.volume)
             if key == self._prepared_key:
@@ -396,6 +405,7 @@ class VolumeViewportHost(QWidget):
             self.backend.render(self.controller.state, self._interactive, self.controller.display_state,
                                 self.controller.visible_mask)
             self._presented_key = self._prepared_key
+            self._update_export_readiness()
         except Exception as error:
             logger.exception("VTK rendering failed")
             self.controller.render_failed(error_message(error))
@@ -414,6 +424,7 @@ class VolumeViewportHost(QWidget):
                     self.request_render()
             else:
                 self._exposed_windows.discard(watched)
+            self._update_export_readiness()
         return super().eventFilter(watched, event)
 
     def dispose(self):

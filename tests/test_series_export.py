@@ -175,6 +175,17 @@ def test_per_frame_windows_do_not_modify_dataset():
     assert ds.WindowCenter == 50 and ds.WindowWidth == 100
 
 
+def test_full_range_review_maps_current_finite_samples_and_inverts_only_valid_pixels():
+    from voxplane.core.export_images import full_range_review_image
+
+    pixels = np.array([[-.5, -.25, 0, np.nan, np.inf]])
+    for inverted, expected in ((False, [0, 128, 255, 0, 0]), (True, [255, 127, 0, 0, 0])):
+        image = full_range_review_image(pixels, inverted=inverted)
+        assert [image.pixelColor(x, 0).red() for x in range(5)] == expected
+    constant = full_range_review_image(np.full((2, 2), 5), inverted=True)
+    assert all(constant.pixelColor(x, y).red() == 255 for x in range(2) for y in range(2))
+
+
 @pytest.mark.parametrize("format", ["png", "dicom"])
 def test_burned_in_late_instance_blocks_anonymous_export(tmp_path, format):
     series = make_series(tmp_path, 2)
@@ -261,5 +272,25 @@ def test_background_export_locks_anonymous_and_snapshots_selected_series(qt_app,
         controller.closeDialog()
         controller.startExport("png", False)
         assert not controller.busy
+    finally:
+        controller.shutdown()
+
+
+def test_changed_source_is_refused_after_dialog_confirmation(qt_app, tmp_path):
+    series = make_series(tmp_path, 2)
+    settings = SettingsController(path=False)
+    destination = tmp_path / "out"
+    settings.setValue("export", "directory", str(destination))
+    controller = SeriesExportController(catalog_for(series, tmp_path), settings)
+    try:
+        controller.openSeries(series.series_instance_uid, False)
+        path = series.instances[-1].path
+        changed = pydicom.dcmread(path)
+        changed.PatientName = "DIFFERENT^PATIENT"
+        changed.save_as(path, enforce_file_format=True)
+        controller.startExport("dicom", False)
+        wait_until(lambda: not controller.busy)
+        assert "重新导入" in controller.message and "DIFFERENT" not in controller.message
+        assert not controller.outputDirectory and not destination.exists()
     finally:
         controller.shutdown()

@@ -9,6 +9,16 @@ def _msg(key, **values):
     return localize(message(key, **values))
 
 
+def actual_method_text(method):
+    """Keep the recorded method translatable in the UI and frozen reports."""
+    key = {
+        'direct_fft': 'mtf.usedDirect', 'tukey_fft': 'mtf.usedWeighted',
+        'gaussian': 'mtf.usedGaussian', 'gaussian_equivalent': 'mtf.usedEquivalent',
+        'half_height': 'ramp.usedHalfHeight',
+    }.get(method)
+    return message(key) if key else method
+
+
 def metric_quality(axis, metric, threshold, direction):
     value = getattr(axis, metric)
     empty = dict(status='ok', message='', relativeChange=None, incomplete=False, missingCrossing=False)

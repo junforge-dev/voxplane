@@ -157,7 +157,7 @@ def test_native_thin_mr_3d_and_mpr_reference(scene,sample_root,tmp_path):
     r=next(iter(app.panelController._scan_series_record.values()))
     ws.createTab(r.series_instance_uid,'Thin MR 3D','3d');ready(ws)
     view=ws.activeViewport
-    wait_until(lambda:view._host is not None,timeout=15000);QTest.qWait(200)
+    wait_until(lambda: view.exportReady, timeout=15000)
     before=view.volume.modality_pixels.copy()
     for preset in ('mr-general','mr-bright','mr-mip'):
         view.applyVolumePreset(preset);QTest.qWait(100)
@@ -170,7 +170,7 @@ def test_native_thin_mr_3d_and_mpr_reference(scene,sample_root,tmp_path):
     ws.createTab(r.series_instance_uid,'Thin MR MPR','mpr');ready(ws)
     tab=ws.activeTab;tab.mprLayout.setLayout('quad')
     reference=tab.mprLayout.volumeViewport
-    wait_until(lambda:reference._host is not None,timeout=15000);QTest.qWait(250)
+    wait_until(lambda: reference.exportReady, timeout=15000)
     assert reference.currentPresetId=='mr-general'
     assert reference.volume is tab.mprLayout._pending_volume
     assert reference.snapshot_image().save(str(tmp_path/'mr-mpr-reference.png'))
@@ -198,7 +198,7 @@ def test_native_mr_padding_stays_excluded_on_mip_and_reset(scene,tmp_path,polari
     ws=app.workspaceController
     ws.createTab(r.series_instance_uid,'Synthetic padded MR','3d');ready(ws)
     view=ws.activeViewport
-    wait_until(lambda:view._host is not None,timeout=15000)
+    wait_until(lambda: view.exportReady, timeout=15000)
     QTest.qWait(150)
     before=view.volume.modality_pixels.copy()
     view.applyVolumePreset('mr-mip');view.autoWindow();QTest.qWait(150)
@@ -223,7 +223,7 @@ def test_native_thin_mr_crop_mouse_gesture_and_reset(scene, sample_root, tmp_pat
     ws.createTab(record.series_instance_uid, 'MR crop', '3d')
     ready(ws)
     view = ws.activeViewport
-    wait_until(lambda: view._host is not None, timeout=15000)
+    wait_until(lambda: view.exportReady, timeout=15000)
     QTest.qWait(200)
     original = view.volume.modality_pixels.copy()
     click(window, find(window, 'primaryTool-volume-crop'))

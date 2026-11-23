@@ -4,7 +4,7 @@ import QtQuick
 import "PaletteData.js" as PaletteData
 
 QtObject {
-    readonly property var palette: typeof appController !== "undefined" && appController.appearanceController
+    readonly property var palette: typeof appController !== "undefined" && appController?.appearanceController
         ? appController.appearanceController.colors : PaletteData.data.defaults
 
     // Brand colors: cold cyan is the main interaction color, while steel blue

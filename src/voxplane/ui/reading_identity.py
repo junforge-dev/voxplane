@@ -43,7 +43,7 @@ def _visible_identity(meta):
             meta.series_number, meta.series_description)
 
 
-def _source_code(uid):
+def source_code(uid):
     # A presentation discriminator, never a replacement for a DICOM/workspace key.
     return sha256(uid.encode('utf-8')).hexdigest()[:8]
 
@@ -68,7 +68,7 @@ def tab_presentation(tab, *, sources=(), hide_identity=False):
         duplicates = {getattr(other, 'series_uid', getattr(other, 'series_instance_uid', ''))
                       for other in sources if _visible_identity(other) == _visible_identity(meta)}
         if len(duplicates) > 1:
-            description = _join(('[' + _source_code(meta.series_uid) + ']', description))
+            description = _join(('[' + source_code(meta.series_uid) + ']', description))
         if meta.patient_name.strip():
             patients.append(meta.patient_name)
         primary.append(description)
@@ -82,7 +82,7 @@ def tab_presentation(tab, *, sources=(), hide_identity=False):
         details.append(_msg('reading.sourceDetails', patient=patient, patientId=meta.patient_id or '—', time=format_study_time(meta.study_time) or '—',
                             date=format_study_date(meta.study_date) or meta.study_date or study_date, study=meta.study_description or _msg('text.0259'),
                             number=meta.series_number if meta.series_number is not None else _msg('reading.missingNumber'),
-                            description=meta.series_description or _msg('text.0259'), source=_source_code(meta.series_uid)))
+                            description=meta.series_description or _msg('text.0259'), source=source_code(meta.series_uid)))
     label_parts = [_join(values, ' ↔ ') for values in (primary, patients, secondary) if values]
     return dict(row, tabLabel=_join(label_parts),
                 tabPrimary=_join(primary, ' ↔ '), tabSecondary=_join(secondary, ' ↔ '),

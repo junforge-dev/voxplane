@@ -7,6 +7,7 @@ import "../../../../theme"
 
 Rectangle {
     id: root
+    property Item hoverSource: null
     property var visibleMetrics: ({})
     property var settingsController: null
     readonly property int decimalPlaces: settingsController?.values.measurement.decimalPlaces ?? 2
@@ -56,8 +57,8 @@ Rectangle {
     readonly property real dimensionsWidth: Math.ceil(dimensionsMetrics.advanceWidth)
     readonly property real areaWidth: Math.ceil(areaMetrics.advanceWidth)
     readonly property var geometryRows: [
-        {key: "dimensions", label: measurement?.type === "ellipse" ? "D1 × D2" : "W × H", value: format(metrics.width_mm) + " × " + format(metrics.height_mm) + " mm", reservedWidth: dimensionsWidth},
-        {key: "area", label: "Area", value: format(metrics.area_mm2) + " mm²", reservedWidth: areaWidth}
+        {key: "dimensions", label: measurement?.type === "ellipse" ? qsTrId("roiCard.diameters") : qsTrId("roiCard.widthHeight"), value: format(metrics.width_mm) + " × " + format(metrics.height_mm) + " mm", reservedWidth: dimensionsWidth},
+        {key: "area", label: qsTrId("text.1005"), value: format(metrics.area_mm2) + " mm²", reservedWidth: areaWidth}
     ].filter(row => root.visibleMetrics[row.key] !== false)
     // Stacked values share one column, so its reservation is the widest row.
     readonly property real geometryReservedWidth: root.geometryRows.reduce((widest, row) => Math.max(widest, row.reservedWidth), 0)
@@ -66,16 +67,16 @@ Rectangle {
     function intensityRows(values, prefix, suffix) {
         const count = Number(values.pixel_count ?? 0)
         const rows = count > 0 ? [
-            {key: "mean", label: prefix + "Mean", value: format(values.mean) + suffix},
-            {key: "std", label: prefix + "SD", value: format(values.std) + suffix},
-            {key: "minimum", label: prefix + "Min", value: format(values.minimum) + suffix},
-            {key: "maximum", label: prefix + "Max", value: format(values.maximum) + suffix}
+            {key: "mean", label: prefix + qsTrId("text.0173"), value: format(values.mean) + suffix},
+            {key: "std", label: prefix + qsTrId("roiCard.sd"), value: format(values.std) + suffix},
+            {key: "minimum", label: prefix + qsTrId("text.0174"), value: format(values.minimum) + suffix},
+            {key: "maximum", label: prefix + qsTrId("text.0175"), value: format(values.maximum) + suffix}
         ] : []
-        rows.push({key: "count", label: prefix + "Pixels", value: String(count)})
+        rows.push({key: "count", label: prefix + qsTrId("text.1007"), value: String(count)})
         return rows
     }
     readonly property var rows: (measurement?.type === "freehand"
-        ? [{key: "perimeter", label: "Perimeter", value: format(metrics.perimeter_mm) + " mm"}] : [])
+        ? [{key: "perimeter", label: qsTrId("measurement.perimeter"), value: format(metrics.perimeter_mm) + " mm"}] : [])
         .concat(intensityRows(metrics, "", unitSuffix))
         .concat(secondary ? intensityRows(secondary, "CT ", " HU") : [])
         .filter(row => root.visibleMetrics[row.key] !== false)
@@ -91,7 +92,7 @@ Rectangle {
     TextMetrics {
         id: geometryLabelMetrics
         font.pixelSize: root.metricFontSize
-        text: root.visibleMetrics.dimensions !== false ? "Size" : "Area"
+        text: root.visibleMetrics.dimensions !== false ? qsTrId("measurement.dimensions") : qsTrId("text.1005")
     }
     implicitWidth: Math.max(238, root.geometryRows.length > 0
         ? Math.ceil(geometryLabelMetrics.advanceWidth) + root.geometryReservedWidth + 8 + 20
@@ -166,7 +167,35 @@ Rectangle {
                 required property var modelData
                 Layout.fillWidth: true
                 spacing: 8
-                Text { Layout.minimumWidth: 0; Layout.preferredWidth: implicitWidth; wrapMode: Text.Wrap; text: metricRow.modelData.label; color: Theme.overlayMuted; font.pixelSize: root.metricFontSize }
+                Text {
+                    Layout.minimumWidth: 0
+                    Layout.preferredWidth: implicitWidth
+                    wrapMode: Text.Wrap
+                    Accessible.name: metricRow.modelData.label + " " + metricRow.modelData.value
+                    Accessible.description: metricRow.modelData.key === "std" ? qsTrId("roiCard.sdHint") : ""
+                    text: metricRow.modelData.label
+                    color: Theme.overlayMuted
+                    font.pixelSize: root.metricFontSize
+                }
+                Loader {
+                    // The viewport's interaction layer owns image hover and drag input.
+                    // Settings previews can observe the row directly.
+                    active: metricRow.visible && metricRow.modelData.key === "std"
+                    visible: false
+                    sourceComponent: Components.AppToolTip {
+                        parent: metricRow
+                        text: qsTrId("roiCard.sdHint")
+                        requested: root.hoverSource
+                            ? root.hoverSource.hovering && metricRow.contains(
+                                metricRow.mapFromItem(root.hoverSource, root.hoverSource.cursorPosition))
+                            : deviationHover.hovered
+                    }
+                }
+                HoverHandler {
+                    id: deviationHover
+                    enabled: !root.hoverSource && metricRow.modelData.key === "std"
+                    blocking: false
+                }
                 Text {
                     Layout.fillWidth: true
                     text: metricRow.modelData.value

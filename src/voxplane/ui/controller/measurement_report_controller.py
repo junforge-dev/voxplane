@@ -14,6 +14,8 @@ from PySide6.QtCore import QObject, Property, Signal, Slot, QPointF, QRectF, Qt
 from PySide6.QtGui import QImage, QPainter, QPen, QColor, QPolygonF, QFont
 
 from voxplane.core.measurement_report import csv_bytes, pdf_bytes
+from voxplane.core.mtf_quality import actual_method_text
+from voxplane.core.ramp_fwhm import ramp_slice_thickness
 from voxplane.ui.controller.settings_controller import resolve_settings
 from voxplane.core.workspace_state import atomic_write
 from voxplane.model.measure import LengthMeasurement, AngleMeasurement, RoiMeasurement
@@ -52,6 +54,23 @@ def capture_results(workspace, catalog, *, all_tabs=False, anonymous=True, inclu
             row["orientation"] = " / ".join(f"{v:.7g}" for v in frame[5][5:11])
         return row
 
+    def add_reference(view, row, item, frame, source):
+        if not source.get("kind") and str(view.viewport_config.viewport_type.value) == "stack":
+            request = replace(view._build_render_request(initial=False), slice_index=item.slice_index)
+            source = capture_request(request) | source
+        key = (view.viewportId, repr(frame), source.get("parameters", {}).get("phase_identifier"), source.get("pixelFingerprint"))
+        picture = picture_groups.get(key)
+        if picture is None:
+            picture = dict(source=source, frame=frame, display=display_parameters(view), rows=[], measurements=[],
+                caption=_msg("text.0389", value1=row["patient"], value2=row["series"], value3=row["view"], value4=row["slice"]))
+            picture_groups[key] = picture
+            pictures.append(picture)
+        picture["rows"].append(row)
+        picture["measurements"].append((row["id"], item))
+        series = catalog.get_series(item.series_uid)
+        picture.setdefault("source_paths", set()).update(i.path for group in (series, *series.phases) for i in group.instances)
+        sources.update(picture["source_paths"])
+
     for tab in tabs:
         if tab is None: continue
         for view in tab.viewports_by_id.values():
@@ -80,21 +99,22 @@ def capture_results(workspace, catalog, *, all_tabs=False, anonymous=True, inclu
                 row["name"] = "" if anonymous else measure.measurement_name(item)
                 rows.append(row)
                 if include_images:
-                    source = measure.source(mid)
-                    if not source and str(view.viewport_config.viewport_type.value) == "stack":
-                        source = capture_request(replace(view._build_render_request(initial=False), slice_index=item.slice_index))
-                    key = (view.viewportId, repr(measure.frame_for(mid)), source.get("parameters", {}).get("phase_identifier"), source.get("pixelFingerprint"))
-                    picture = picture_groups.get(key)
-                    if picture is None:
-                        picture = dict(source=source, frame=measure.frame_for(mid), display=display_parameters(view),
-                            rows=[], measurements=[], caption=_msg("text.0389", value1=row["patient"], value2=row["series"], value3=role, value4=row["slice"]))
-                        picture_groups[key] = picture
-                        pictures.append(picture)
-                    picture["rows"].append(row)
-                    picture["measurements"].append((row["id"], item))
-                    series = catalog.get_series(item.series_uid)
-                    picture.setdefault("source_paths", set()).update(i.path for group in (series, *series.phases) for i in group.instances)
-                    sources.update(picture["source_paths"])
+                    add_reference(view, row, item, measure.frame_for(mid), measure.source(mid))
+            fwhm = getattr(view, "fwhmController", None)
+            if fwhm is not None:
+                if fwhm.roiController.has_active_transaction:
+                    raise ValueError(_msg('text.0383'))
+                for record in fwhm.completed_records:
+                    roi, result = record["roi"], record["result"]
+                    angle = record["preferences"]["rampThicknessAngle"]
+                    row = base(roi.series_uid, role, "FWHM", roi.slice_index, record["frame"], roi.sop_instance_uid)
+                    row.update(fwhm_mm=result.fwhm, slice_thickness_mm=ramp_slice_thickness(result.fwhm, angle),
+                               angle_deg=angle, profile_direction=result.direction.upper(),
+                               actual_method=actual_method_text(result.analysis_method), profile_warnings=result.warnings)
+                    rows.append(row)
+                    if include_images:
+                        add_reference(view, row, roi, record["frame"], {
+                            "verifySourceSpacing": True, "pixelFingerprint": record.get("fingerprint", "")})
             for item in view._text_annotation_controller._annotations.values():
                 row = base(view.viewport_config.series_uid, role, "text", item.slice_index, item.frame_key)
                 row["text"] = "" if anonymous else item.text

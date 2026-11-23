@@ -9,7 +9,9 @@ from typing import Iterable, Iterator, cast
 
 import pydicom
 
+from voxplane.core.ct import ct_dataset_supports_hu
 from voxplane.core.mr import read_mr_parameters
+from voxplane.core.pet_timing import pet_scan_start_candidate
 from voxplane.core.pet import pet_2d_support_error
 from voxplane.model import (
     DicomFolderScanSnapshot,
@@ -109,6 +111,19 @@ def _read_phase_values(
         if value is not None:
             values.append((keyword, value))
     return tuple(values)
+
+
+def stack_phase_key(instance: DicomInstanceMeta, series: DicomSeriesRecord):
+    """Identify temporal bins without treating each slice acquisition time as a phase."""
+    temporal_keywords = _PHASE_VALUE_KEYWORDS[:_PHASE_VALUE_KEYWORDS.index("AcquisitionNumber")]
+    keys = tuple((key, value) for key, value in instance.phase_values
+                 if key == series.phase_source_keyword or
+                 (key in temporal_keywords and key != "FrameAcquisitionNumber"))
+    if not keys and max(instance.number_of_temporal_positions or 0, instance.number_of_phases or 0) > 1:
+        return None
+    return keys
+
+
 def _string_values(value) -> tuple[str, ...]:
     if value is None:
         return ()
@@ -225,6 +240,7 @@ def _read_instance(file_path: Path, dataset=None) -> DicomInstanceMeta | None:
         study_time=_as_str(getattr(dataset, "StudyTime", "")),
         patient_id_issuer=_as_str(getattr(dataset, "IssuerOfPatientID", "")),
         sop_class_uid=sop_class_uid,
+        ct_hu_supported=modality.upper() == "CT" and ct_dataset_supports_hu(dataset),
         number_of_frames=number_of_frames,
         samples_per_pixel=_as_int(getattr(dataset, "SamplesPerPixel", None)) or 1,
         mr_parameters=read_mr_parameters(dataset),
@@ -236,6 +252,8 @@ def _read_instance(file_path: Path, dataset=None) -> DicomInstanceMeta | None:
         pet_corrected_image=_string_values(
             getattr(dataset, "CorrectedImage", None)
         ),
+        pet_scan_start_candidate=(pet_scan_start_candidate(dataset)
+                                  if modality.upper() == "PT" and dataset.get("DecayCorrection") == "START" else ""),
         pet_decay_correction=_as_str(
             getattr(dataset, "DecayCorrection", "")
         ),
@@ -360,7 +378,10 @@ def _build_series_record(
     ):
         pet_support_error = _msg('text.0102')
 
+    pet_starts = {instance.pet_scan_start_candidate for instance in ordered
+                  if instance.pet_decay_correction == "START"}
     return DicomSeriesRecord(
+        pet_series_start=pet_starts.pop() if len(pet_starts) == 1 else "",
         patient_name=first.patient_name,
         patient_id=first.patient_id,
         study_description=first.study_description,

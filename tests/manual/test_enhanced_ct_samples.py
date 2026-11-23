@@ -114,7 +114,8 @@ def test_public_perfusion_units_are_not_mislabeled_hu(sample_root):
         np.testing.assert_allclose(result.modality_pixel, raw[f].astype(float)*float(mapping.RealWorldValueSlope)+float(mapping.RealWorldValueIntercept))
         mask = raw[f] >= 1024
         np.testing.assert_array_equal(result.image[mask], lut[np.clip(raw[f][mask].astype(int)-1024,0,99)])
-        gray = DicomLoader.apply_window(values, result.window, False)
+        gray = DicomLoader.apply_window(values, result.window, False,
+            voi_lut_function=result.instance_meta.voi_lut_function)
         np.testing.assert_array_equal(result.image[~mask], np.repeat(gray[~mask,None],3,axis=1))
 
 
@@ -147,8 +148,7 @@ def test_public_ct_native_views_and_source_export(scene, sample_root, tmp_path):
     tab = ws.activeTab
     tab.mprLayout.setLayout('quad')
     reference = tab.mprLayout.volumeViewport
-    wait_until(lambda: reference._host is not None, timeout=15000)
-    QTest.qWait(250)
+    wait_until(lambda: reference.exportReady, timeout=15000)
     assert reference.snapshot_image().save(str(tmp_path/'enhanced-ct-mpr-reference.png'))
     assert window.grabWindow().save(str(tmp_path/'enhanced-ct-mpr.png'))
     volume = reference.volume
@@ -166,8 +166,7 @@ def test_public_ct_native_views_and_source_export(scene, sample_root, tmp_path):
     assert axial.modality_pixels[row,col] == pytest.approx(expected, abs=.002)
     ws.createTab(series.series_instance_uid, 'Enhanced CT 3D', '3d'); ready(ws)
     view = ws.activeViewport
-    wait_until(lambda: view._host is not None, timeout=15000)
-    QTest.qWait(250)
+    wait_until(lambda: view.exportReady, timeout=15000)
     assert view.snapshot_image().save(str(tmp_path/'enhanced-ct-3d.png'))
     assert not view._host.backend._error
     request = ExportRequest(tuple(i.path for i in series.instances), tmp_path/'exports', 'dicom', False)

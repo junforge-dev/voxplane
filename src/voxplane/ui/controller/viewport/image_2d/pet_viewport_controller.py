@@ -161,7 +161,7 @@ class LinkedPetViewport(MprViewportController):
     @Slot(float, float)
     def applyWindowPreset(self, center, width):
         if self.viewportRole == "ct":
-            self.owner.set_ct_window(WindowLevel(center, max(1., width)))
+            self.owner.setCtWindow(center, width)
         else:
             self.setPetDisplayUpper(center + width / 2)
 

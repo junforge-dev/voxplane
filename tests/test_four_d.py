@@ -55,6 +55,8 @@ def _write_phase_slice(
     dataset.SOPClassUID = CTImageStorage
     dataset.SOPInstanceUID = sop_uid
     dataset.Modality = "CT"
+    dataset.ImageType = ["ORIGINAL", "PRIMARY", "AXIAL"]
+    dataset.RescaleSlope, dataset.RescaleIntercept = 1, 0
     dataset.SeriesNumber = 4
     dataset.InstanceNumber = phase_identifier * 100 + slice_index
     dataset.TemporalPositionIdentifier = phase_identifier

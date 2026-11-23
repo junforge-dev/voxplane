@@ -4,6 +4,7 @@ import "../../../theme"
 
 Rectangle {
     id: imageCanvasRoot
+    property Item hoverSource: null
     required property var viewportController
     property var reservedRegions: []
     property real instructionBottomMargin: 32

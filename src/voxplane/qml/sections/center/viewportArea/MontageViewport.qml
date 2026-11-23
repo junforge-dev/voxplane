@@ -44,7 +44,10 @@ Item {
     function formatNumber(value) {
         if (!Number.isFinite(value))
             return "—"
-        const scale = montageRoot.viewportController?.isMrViewport ? 1000 : 100
+        const mr = montageRoot.viewportController?.isMrViewport
+        if (montageRoot.viewportController?.minimumWindowWidth < (mr ? 0.001 : 1))
+            return String(value)
+        const scale = mr ? 1000 : 100
         const rounded = Math.round(value * scale) / scale
         return String(rounded)
     }

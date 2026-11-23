@@ -164,6 +164,8 @@ View CT, PET, fused planes, and whole-volume MIP together. Adjust orientation, c
 
 Copy and paste completed measurements or annotations with **⌘C / ⌘V (Windows: Ctrl+C / Ctrl+V)**, including when a toolbar button has focus. Text fields and dialogs take priority; pasted statistics use the current viewport. QA circles do not use these clipboard shortcuts.
 
+Copy a rectangle, ellipse, or freehand ROI, then choose Paste ROI in place on another original 2D slice of the same series and phase to keep the contour and measure the target pixels. Use ⇧⌘V on macOS or Ctrl+Shift+V on Windows.
+
 Unselected ROIs use compact labels and expand their statistics when selected. Metrics wait for enough valid points. Partly out-of-image ROIs use valid pixels for intensity statistics while retaining their full drawn area and dimensions.
 
 ![Measurement tools and grouped results](docs/screenshots/en/63-measurement-voxplane-2.6.0.png)
@@ -197,7 +199,7 @@ Unselected ROIs use compact labels and expand their statistics when selected. Me
 
 ## Data and workspaces
 
-Import source DICOM images on the left and associated SEG / NRRD masks through **Import segmentation** on the right (named “Import” in v2.1.3). Export source series as PNG or DICOM, or save the current view as a PNG screenshot. Series export and viewport screenshots have different content scopes; see [export details](docs/export.md).
+Import source DICOM images on the left and associated SEG / NRRD masks through **Import segmentation** on the right (named “Import” in v2.1.3). Export source series as PNG or DICOM, or save the current view as a PNG screenshot. Series export and viewport screenshots have different content scopes; see [export details](docs/export.md). Before exporting, review the frames for burned-in text and compare the selected frame count with the actual output count.
 
 Drag tabs into detached windows or move them between windows. Workspaces preserve image references, layouts, measurements, segmentation masks, analysis results, selected tools, and refinement settings, with automatic recovery. Opening a series activates an existing tab of the same view type and preserves its reading state, or creates a tab if none matches. If you close a tab accidentally, choose **Reopen closed tab** from the tab-bar context menu, or press Ctrl+Shift+T / ⇧⌘T. The session remembers the last 20 closed, fully loaded reading tabs without edits. Workspace files retain completed editing results from closed tabs. Exiting prompts to save workspace changes. Keep source files available: workspaces store references and results, not source pixels, unfinished drafts, or undo history. Choose a fixed theme or follow the system appearance. Use local JSON language packs and window presets, an offline manual with playable, pausable, and zoomable workflow demos, feedback, and optional startup update checks.
 

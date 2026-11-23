@@ -450,6 +450,9 @@ def test_real_qml_layout_choices_bounds_and_state(loaded, monkeypatch, size):
 
 @pytest.mark.skipif(os.environ.get("VOXPLANE_NATIVE_QA") != "1", reason="requires native desktop window")
 def test_native_four_up_reference_view(loaded, tmp_path):
+    from test_dicom_tags import wait_until
+    from test_tag_qml import click, find
+
     workspace, tab, provider, _, failures = loaded
     layout = tab.mprLayout
     layout.setLayout("quad")
@@ -465,10 +468,10 @@ def test_native_four_up_reference_view(loaded, tmp_path):
     view.show()
     tab.toolController.activateTool("mpr-layout")
     try:
-        QTest.qWait(600)
         v = layout.volumeViewport
+        wait_until(lambda: v._host and v._host.frame_ready and v._host.surface_ready(), timeout=10000)
         host = v._host
-        assert host and host._active and host.backend._initialized
+        assert host._active and host.backend._initialized
         assert v.loadState == "ready", v.errorMessage
         assert host.backend.mpr_reference.center == tab._target_mpr_state.frame.center_patient
         widget = host.vtk_widget
@@ -513,13 +516,21 @@ def test_native_four_up_reference_view(loaded, tmp_path):
         image = v.snapshot_image()
         assert not image.isNull()
         assert image.save(str(tmp_path / "mpr-reference.png"))
-        layout.setLayout("rows")
-        QTest.qWait(100)
-        assert not host._active
-        layout.setLayout("quad")
+        click(view, find(view, "primaryTool-mpr-layout"))
+        click(view, find(view, "mprLayout-rows"))
+        wait_until(lambda: layout.layout == "rows" and not host._active)
+        previous_draw = host._last_draw
+        click(view, find(view, "mprLayout-quad"))
         view.resize(960, 680)
-        QTest.qWait(250)
-        assert host._active and v.loadState == "ready"
+        # QML recreates the WindowContainer, then Cocoa/Windows exposes its
+        # child asynchronously. Require a new draw on the reattached surface.
+        wait_until(lambda: host._active and host.surface_ready() and host.frame_ready
+                   and host._last_draw > previous_draw, timeout=10000)
+        assert layout.layout == "quad" and v.loadState == "ready"
+        assert len([i for i in _visual_children(view.rootObject())
+                    if i.objectName().startswith("viewportCell-") and i.isVisible()]) == 3
+        assert v.snapshot_image().save(str(tmp_path / "mpr-reference-returned.png"))
+        assert view.grabWindow().save(str(tmp_path / "mpr-four-up-returned.png"))
         # Close while the native child is attached, as in the real tab strip.
         workspace.closeTab(tab.tab_config.tab_id)
         QTest.qWait(50)

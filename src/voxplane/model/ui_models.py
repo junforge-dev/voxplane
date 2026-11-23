@@ -92,6 +92,8 @@ class DicomInstanceMeta:
     ct_dimension_indices: tuple = ()
     ct_support_error: str = ""
     media_storage_sop_instance_uid: str = ""
+    ct_hu_supported: bool = False
+    pet_scan_start_candidate: str = ""
 
     @property
     def file_identity(self) -> tuple[str, str]:
@@ -152,6 +154,9 @@ class DicomSeriesRecord:
     pet_2d_support_error: str = ""
     frame_of_reference_uid: str = ""
 
+    # Empty when START frames lack a single comparable decay reference.
+    pet_series_start: str = ""
+
     @property
     def dicom_file_count(self) -> int:
         return len(self.instances)
@@ -197,7 +202,7 @@ class DicomSeriesRecord:
         if len(self.phases) < 2:
             return False
         if any(
-            instance.number_of_frames != 1
+            instance.number_of_frames != 1 or (self.modality.upper() == "CT" and not instance.ct_hu_supported)
             for phase in self.phases
             for instance in phase.instances
         ):

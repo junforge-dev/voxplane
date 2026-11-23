@@ -50,10 +50,10 @@ def test_lossless_view_thumbnail_volume_export(qt_app, tmp_path, syntax, modalit
     np.testing.assert_array_equal(volume.modality_pixels, np.stack([expected, expected]))
     result = export_series(ExportRequest(tuple(paths), tmp_path / 'export', format='png'))
     assert result.file_count == 2
-    # Hand-selected intensities after slope .5/intercept -1024 and [-2048, 0] window.
+    # DICOM LINEAR with c=-1024 and w=2048 maps [-2048, -1] to [0, 255].
     # Include interior levels so ignoring rescale/window cannot pass.
     expected_pixels = [(0, 0, 0), (0, 16, 63), (0, 32, 127),
-                       (0, 48, 191), (63, 63, 254)]
+                       (0, 48, 191), (63, 63, 255)]
     outputs = sorted(result.directory.glob('*.png'))
     assert len(outputs) == 2
     for path in outputs:

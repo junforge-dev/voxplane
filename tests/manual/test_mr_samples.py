@@ -245,7 +245,7 @@ def test_real_series_export_preserves_pixels_and_metadata(qt_app,sample_root,tmp
 
 
 def test_real_mouse_roi_and_current_view_export(scene,sample_root,tmp_path,monkeypatch):
-    from test_measurement_qml import _scene, _mouse_drag
+    from test_measurement_qml import _click_points, _scene
     window,app,warnings=scene
     uid=scan(sample_root/T1_FOLDERS[0]).series[0].series_instance_uid
     import_local(app,[sample_root/T1_FOLDERS[0]])
@@ -259,7 +259,7 @@ def test_real_mouse_roi_and_current_view_export(scene,sample_root,tmp_path,monke
     wait_until(lambda:any(i.objectName()=='dicomPixelLayer' and i.isVisible() for i in descendants(window.contentItem())))
     layer=next(i for i in descendants(window.contentItem()) if i.objectName()=='dicomPixelLayer' and i.isVisible())
     assert not window.grabWindow().isNull()
-    _mouse_drag(window,_scene(layer,110,90),_scene(layer,150,130))
+    _click_points(window, _scene(layer, 110, 90), _scene(layer, 150, 130))
     items=view.measurementController.measurementItems
     assert len(items)==1 and items[0]['metrics']['unit']=='a.u.'
     assert items[0]['metrics']['width_mm']==pytest.approx(40*1.015625,abs=1)

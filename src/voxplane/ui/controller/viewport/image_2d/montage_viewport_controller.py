@@ -277,9 +277,10 @@ class MontageViewportController(ViewportController):
     def supportsGrayscaleWindow(self):
         return self.modality.upper() in ("CT", "MR")
 
-    @Property(float, constant=True)
+    @Property(float, notify=displayStateChanged)
     def minimumWindowWidth(self):
-        return 0.001 if self.isMrViewport else 1.0
+        default = 0.001 if self.isMrViewport else 1.0
+        return min(default, self._baseline_window.width) if self._baseline_window else default
 
     @Slot()
     def autoWindow(self):
@@ -496,7 +497,9 @@ class MontageViewportController(ViewportController):
                 from voxplane.core.display_mapping import map_display
                 frame = self._display_frames[index]
                 gray = DicomLoader.apply_window(pixels, self._state.window,
-                    self.inverted ^ self._display_polarities.get(index, False), self.minimumWindowWidth)
+                    self.inverted ^ self._display_polarities.get(index, False),
+                    frame.instance_meta.minimum_window_width(self.minimumWindowWidth),
+                    voi_lut_function=frame.instance_meta.voi_lut_function)
                 image = map_display(gray, self._display_values[index], frame.pixel_value_meta,
                     frame.supplemental_overlay, frame.source_palette, self._state.display_mapping, self.activeColorMap)
                 self.imageUpdateRequested.emit(self.image_key(index), image)

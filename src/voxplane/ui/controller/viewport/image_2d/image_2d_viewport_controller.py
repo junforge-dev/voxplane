@@ -158,6 +158,7 @@ class Image2DViewportController(ViewportController):
     directionLabelsChanged = Signal()
     windowPresetsChanged = Signal()
     loadStateChanged = Signal()
+    roiPasteStateChanged = Signal()
     petDisplayChanged = Signal()
     hit_tolerance = 6
 
@@ -889,6 +890,7 @@ class Image2DViewportController(ViewportController):
         if not isinstance(self._active_drag_operation, MeasurementController) and not temporary_zoom:
             self.cancelMeasurement()
         self._active_drag_start_position = position
+        self.roiPasteStateChanged.emit()
         result = self._active_drag_operation.begin(
             position,
             context,
@@ -993,6 +995,7 @@ class Image2DViewportController(ViewportController):
 
         result = operation.end(position)
         self._apply_interaction_result(result)
+        self.roiPasteStateChanged.emit()
 
     @Slot(float,float,float, float, float, float, bool, float, float)
     def updateCursorPosition(
@@ -1169,9 +1172,12 @@ class Image2DViewportController(ViewportController):
     def supportsGrayscaleWindow(self):
         return not self.viewport_config.series_meta.is_color and self.viewport_config.series_meta.modality.strip().upper() in ("CT", "MR")
 
-    @Property(float, constant=True)
+    @Property(float, notify=overlayChanged)
     def minimumWindowWidth(self):
-        return 0.001 if self.isMrViewport else 1.0
+        if self.isPetViewport and self._pet_display.visible is not None:
+            return self._pet_display.visible.minimum
+        default = 0.001 if self.isMrViewport else 1.0
+        return self._frame_meta.instance_meta.minimum_window_width(default) if self._frame_meta else default
 
     @Slot()
     def autoWindow(self):
@@ -1193,7 +1199,8 @@ class Image2DViewportController(ViewportController):
         return dict(source=f"{base}:scalar/{self._scalar_data_revision}",
                     cpu=f"{base}:scalar-cpu/{self._scalar_revision}",
                     lut=f"{base}:lut/{frame.color_map}", minimum=frame.minimum, span=frame.span,
-                    lower=frame.window.center-frame.window.width/2, width=frame.window.width,
+                    center=frame.window.center, width=frame.window.width,
+                    voiFunction=frame.voi_lut_function,
                     inverted=frame.inverted)
 
     def enable_scalar_display(self):
@@ -1216,14 +1223,16 @@ class Image2DViewportController(ViewportController):
                 self.scalarDisplayUpdateRequested.emit(self.viewportId,None)
                 self.scalarDisplayChanged.emit()
             return
-        window = DicomLoader.normalize_window(self.current_window,minimum_width=self.minimumWindowWidth)
+        window = DicomLoader.normalize_window(self.current_window, minimum_width=self.minimumWindowWidth)
+        voi_function = frame.instance_meta.voi_lut_function
         inverted = self.inverted ^ (self.isMrViewport and frame.instance_meta.photometric_interpretation == "MONOCHROME1")
         intent = self._state.display_mapping
         if intent.applies_to(frame.pixel_value_meta.unit):
             pixels = self._modality_pixel
             window = WindowLevel((intent.lower+intent.upper)/2,intent.upper-intent.lower)
             inverted = False
-        signature = (id(pixels),window,inverted,self.activeColorMap)
+            voi_function = "LINEAR_EXACT"
+        signature = (id(pixels),window,inverted,self.activeColorMap,voi_function)
         if signature == self._scalar_signature:
             return
         old = self._scalar_frame
@@ -1232,7 +1241,8 @@ class Image2DViewportController(ViewportController):
         else:
             encoded, lower, span = pack_scalar(pixels)
             self._scalar_data_revision += 1
-        scalar = ScalarDisplayFrame(pixels,window,inverted,self.activeColorMap,encoded,lower,span)
+        scalar = ScalarDisplayFrame(pixels,window,inverted,self.activeColorMap,encoded,lower,span,
+                                    voi_lut_function=voi_function)
         self._scalar_frame, self._scalar_signature = scalar,signature
         self._scalar_revision += 1
         self.scalarDisplayUpdateRequested.emit(self.viewportId,scalar)
@@ -1264,9 +1274,10 @@ class Image2DViewportController(ViewportController):
                 return
             window, minimum = target.window, target.minimum
         from voxplane.core.display_mapping import map_display
-        gray = DicomLoader.apply_window(pixels, window, self.inverted ^ source_inverted, minimum)
-        overlay = self._frame_meta.supplemental_overlay if self._frame_meta else None
         frame = self._frame_meta
+        gray = DicomLoader.apply_window(pixels, window, self.inverted ^ source_inverted, minimum,
+                                        voi_lut_function=frame.instance_meta.voi_lut_function)
+        overlay = frame.supplemental_overlay
         self.present_display_image(map_display(gray, self._modality_pixel, frame.pixel_value_meta,
             overlay, frame.source_palette, self._state.display_mapping, self.activeColorMap))
 
@@ -1923,7 +1934,7 @@ class Image2DViewportController(ViewportController):
                 frame.pixel_value_meta.unit
                 or (
                     "HU"
-                    if self.viewport_config.series_meta.modality.upper() == "CT"
+                    if self.supportsCtWindow
                     else ""
                 )
             ),
@@ -1936,16 +1947,27 @@ class Image2DViewportController(ViewportController):
                 and not self._measure_controller.has_active_transaction
                 and not self._text_annotation_controller._draft_id)
 
+    def _roi_copy_origin(self):
+        from voxplane.ui.annotation_clipboard import RoiCopyOrigin
+        frame = self._frame_meta
+        if (self.viewportType != "stack" or frame is None or not self.hasPhysicalSpacing
+                or self._modality_pixel is None
+                or self._modality_pixel.shape != (frame.geometry.rows, frame.geometry.columns)):
+            return None
+        return RoiCopyOrigin(self.viewport_config.series_uid, frame.stack_phase,
+                             frame.frame_of_reference_uid, frame.geometry)
+
     @Slot(result=bool)
     def copySelectedAnnotation(self) -> bool:
         if not self._clipboard_ready():
             return False
-        from voxplane.ui.annotation_clipboard import write_annotation
+        from voxplane.ui.annotation_clipboard import ROI_KINDS, write_annotation
         payload = (self._text_annotation_controller.selected_copy()
                    or self._measure_controller.selected_copy())
         if payload is None:
             return False
-        write_annotation(payload)
+        origin = self._roi_copy_origin() if payload["kind"] in ROI_KINDS else None
+        write_annotation(payload, origin=origin)
         self._clipboard_payload = None
         self._clipboard_pastes = 0
         return True
@@ -1962,6 +1984,54 @@ class Image2DViewportController(ViewportController):
         # Keep copies distinct without changing geometry dimensions; values are recomputed below.
         offset = 10 * count
         points = [[p[0] + offset, p[1] + offset] for p in payload["points"]]
+        if not self._paste_annotation_points(payload, points):
+            return False
+        self._clipboard_payload, self._clipboard_pastes = payload, count
+        return True
+
+    @Property(QObject, constant=True)
+    def annotationClipboard(self):
+        from PySide6.QtGui import QGuiApplication
+        return QGuiApplication.clipboard()
+
+    def _in_place_paste_busy(self):
+        return (self.render_pending or not self._clipboard_ready()
+                or self.activeAnnotationController.has_active_transaction
+                or (self._qa_controller is not None and self._qa_controller.dragging))
+
+    def _in_place_paste_issue(self, payload, source):
+        from voxplane.ui.annotation_clipboard import ROI_KINDS
+        if payload is None or payload["kind"] not in ROI_KINDS:
+            return "roiPaste.copyRoi"
+        if source is None:
+            return "roiPaste.noOrigin"
+        target = self._roi_copy_origin()
+        if target is None:
+            return "roiPaste.geometry"
+        return source.mismatch(target)
+
+    @Slot(result=str)
+    def roiPasteIssue(self):
+        from voxplane.ui.annotation_clipboard import read_annotation_with_origin
+        if self._in_place_paste_busy():
+            return "roiPaste.notReady"
+        return self._in_place_paste_issue(*read_annotation_with_origin())
+
+    @Property(str, notify=roiPasteStateChanged)
+    def roiPasteUnavailableReason(self):
+        return self.roiPasteIssue() if self.viewportType == "stack" else "roiPaste.notReady"
+
+    @Slot(result=bool)
+    def pasteRoiInPlace(self):
+        from voxplane.ui.annotation_clipboard import read_annotation_with_origin
+        if self._in_place_paste_busy():
+            return False
+        payload, source = read_annotation_with_origin()
+        if self._in_place_paste_issue(payload, source):
+            return False
+        return self._paste_annotation_points(payload, payload["points"])
+
+    def _paste_annotation_points(self, payload, points):
         kind = payload["kind"]
         if kind == "text":
             uid = self._text_annotation_controller.paste_copy(payload, points)
@@ -1978,7 +2048,6 @@ class Image2DViewportController(ViewportController):
                 return False
             self._tool_controller.selectInteraction(("annotate:" if kind == "arrow" else "measure:") + kind)
             self._measure_controller.select_completed(uid)
-        self._clipboard_payload, self._clipboard_pastes = payload, count
         return True
 
     @Slot(result=bool)
@@ -2002,6 +2071,7 @@ class Image2DViewportController(ViewportController):
         if isinstance(self._active_drag_operation, MeasurementController):
             self._active_drag_operation = None
             self._active_drag_start_position = None
+            self.roiPasteStateChanged.emit()
 
     @Slot()
     def deleteSelectedMeasurement(self) -> None:

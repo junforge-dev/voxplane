@@ -297,6 +297,7 @@ def test_native_main_window_switches_during_preparation(sidebar_scene, monkeypat
         wait_until(entered.is_set)
         host = controller._host
         assert not host.data_ready
+        assert not app.exportController.canExportPng
         workspace.openManual('volume')
         wait_until(lambda: not host._active)
         release.set()
@@ -309,7 +310,10 @@ def test_native_main_window_switches_during_preparation(sidebar_scene, monkeypat
             QTest.qWait(delay)
             workspace.activateTabId(tab_id)
             QTest.qWait(delay)
-        wait_until(lambda: host._active and host.data_ready)
+        from test_tag_qml import find
+        workspace.activeTab.toolController.activateTool("export")
+        button = find(window, "exportPng")
+        wait_until(lambda: controller.exportReady and button.isEnabled())
         assert controller.state == state
         assert not controller.snapshot_image().isNull()
         workspace.closeTab(tab_id)
@@ -337,6 +341,21 @@ def test_frame_ready_requires_gpu_draw_and_resets_for_new_volume(host):
     assert not h.frame_ready
     h._render()
     assert h.frame_ready
+
+
+def test_volume_export_readiness_tracks_presentation_and_visibility(host, monkeypatch):
+    h, c = host
+    monkeypatch.setattr(c, "_host", h)
+    notifications = []
+    c.exportReadinessChanged.connect(lambda: notifications.append(c.exportReady))
+    h.sync_status()
+    wait_until(lambda: h.data_ready)
+    h._timer.stop()
+    assert not c.exportReady
+    h._render()
+    assert c.exportReady and notifications == [True]
+    h.set_active(False)
+    assert not c.exportReady and notifications == [True, False]
 
 
 def test_unexposed_native_child_defers_draw_and_recovers(host, monkeypatch):

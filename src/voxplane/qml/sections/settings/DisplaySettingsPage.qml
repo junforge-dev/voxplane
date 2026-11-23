@@ -11,6 +11,7 @@ Item {
     required property string category
     required property string title
     property string resetHint: ""
+    property string shortcutFilter: ""
     readonly property var resetButton: content.item?.focusedResetButton ?? categoryReset
     onCategoryChanged: resetDialog.close()
     function requestReset(section, title) {
@@ -123,6 +124,7 @@ Item {
     Component {
         id: inputPage
         InputSettingsPage {
+            shortcutFilter: page.shortcutFilter
             settingsController: page.settingsController
             resetHint: page.resetHint
             onResetShortcutsRequested: page.requestReset("shortcuts", qsTrId("input.shortcuts"))

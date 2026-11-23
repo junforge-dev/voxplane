@@ -15,6 +15,7 @@ class ScalarDisplayFrame:
     encoded: np.ndarray | None = None
     minimum: float = 0.
     span: float = 1.
+    voi_lut_function: str = 'LINEAR_EXACT'
 
 
 def pack_scalar(pixels):
@@ -51,18 +52,26 @@ def resample_display(frame, width, height):
     x1, y1 = np.minimum(x0+1,columns-1), np.minimum(y0+1,rows-1)
     wx, wy = (x-x0).astype(np.float32), (y-y0).astype(np.float32)
     out = np.empty((height,width),dtype=np.uint8)
+    binary = frame.voi_lut_function == "LINEAR" and frame.window.width <= 1
+    # Interpolate signed distance to the threshold so a flat patch exactly
+    # on it cannot flip between black and white due to weight rounding.
+    window = WindowLevel(0.5, 1.0) if binary else frame.window
     for start in range(0,height,64):
         end = min(start+64,height)
         a, b = y0[start:end,None], y1[start:end,None]
         wy_chunk = wy[start:end,None]
-        values = np.zeros((end-start,width),dtype=np.float32)
+        values = np.zeros((end-start,width),dtype=np.float64 if binary else np.float32)
         coverage = np.zeros_like(values)
         for sample, weight in ((pixels[a,x0],(1-wy_chunk)*(1-wx)),
                                (pixels[a,x1],(1-wy_chunk)*wx),
                                (pixels[b,x0],wy_chunk*(1-wx)),(pixels[b,x1],wy_chunk*wx)):
             valid = np.isfinite(sample)
+            if binary:
+                sample = sample.astype(np.float64) - (frame.window.center - 0.5)
             values += np.where(valid,sample,0)*weight
             coverage += valid*weight
         values[coverage < .99999] = np.nan
-        out[start:end] = DicomLoader.apply_window(values,frame.window,frame.inverted,minimum_width=1e-9)
+        out[start:end] = DicomLoader.apply_window(
+            values, window, frame.inverted, minimum_width=1e-9,
+            voi_lut_function=frame.voi_lut_function)
     return apply_color_map(out,frame.color_map)

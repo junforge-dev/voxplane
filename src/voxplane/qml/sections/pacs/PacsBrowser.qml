@@ -91,10 +91,12 @@ Rectangle {
                         width: filterScroll.availableWidth
                         spacing: 8
                         Caption {
+                            id: profileChoiceLabel
                             text: qsTrId("text.0967")
                         }
                         Components.AppComboBox {
                             id: profileChoice
+                            Accessible.name: profileChoiceLabel.text
                             objectName: "pacsProfileChoice"
                             Layout.fillWidth: true
                             model: browser.pacsController.enabledProfiles
@@ -110,11 +112,13 @@ Rectangle {
                             onActivated: index => browser.pacsController.selectProfile(browser.pacsController.enabledProfiles[index].id)
                         }
                         Caption {
+                            id: patientNameLabel
                             text: qsTrId("text.0028")
                             Layout.topMargin: 5
                         }
                         Components.AppTextField {
                             id: patientName
+                            Accessible.name: patientNameLabel.text
                             objectName: "pacsPatientName"
                             Layout.fillWidth: true
                             placeholderText: qsTrId("pacs.patientWildcard")
@@ -123,10 +127,12 @@ Rectangle {
                             enabled: !browser.pacsController.busy
                         }
                         Caption {
+                            id: patientIdLabel
                             text: qsTrId("text.0029")
                         }
                         Components.AppTextField {
                             id: patientId
+                            Accessible.name: patientIdLabel.text
                             objectName: "pacsPatientId"
                             Layout.fillWidth: true
                             placeholderText: "ID…"
@@ -135,10 +141,12 @@ Rectangle {
                             enabled: !browser.pacsController.busy
                         }
                         Caption {
+                            id: accessionLabel
                             text: qsTrId("text.0968")
                         }
                         Components.AppTextField {
                             id: accession
+                            Accessible.name: accessionLabel.text
                             objectName: "pacsAccession"
                             Layout.fillWidth: true
                             placeholderText: qsTrId("pacs.accessionPlaceholder")
@@ -147,20 +155,25 @@ Rectangle {
                             enabled: !browser.pacsController.busy
                         }
                         Caption {
+                            id: modalityLabel
                             text: qsTrId("text.0026")
                         }
                         Components.AppComboBox {
                             id: modality
+                            objectName: "pacsModality"
+                            Accessible.name: modalityLabel.text
                             Layout.fillWidth: true
                             model: [qsTrId("text.0969"), "CT", "MR", "PT", "CR", "DX", "US", "MG", "NM", "XA", "RF", "OT"]
                             currentIndex: Math.max(0, model.indexOf(browser.pacsController.filterInputs.ModalitiesInStudy || qsTrId("text.0969")))
                             enabled: !browser.pacsController.busy
                         }
                         Caption {
+                            id: dateFromLabel
                             text: qsTrId("text.0970")
                         }
                         Components.AppDateField {
                             id: dateFrom
+                            Accessible.name: dateFromLabel.text
                             objectName: "pacsDateFrom"
                             Layout.fillWidth: true
                             placeholderText: "YYYY-MM-DD"
@@ -169,10 +182,12 @@ Rectangle {
                             enabled: !browser.pacsController.busy
                         }
                         Caption {
+                            id: dateToLabel
                             text: qsTrId("text.0971")
                         }
                         Components.AppDateField {
                             id: dateTo
+                            Accessible.name: dateToLabel.text
                             objectName: "pacsDateTo"
                             Layout.fillWidth: true
                             placeholderText: "YYYY-MM-DD"
@@ -181,10 +196,13 @@ Rectangle {
                             enabled: !browser.pacsController.busy
                         }
                         Caption {
+                            id: pageSizeLabel
                             text: qsTrId("text.0972")
                         }
                         Components.AppComboBox {
                             id: pageSize
+                            objectName: "pacsPageSize"
+                            Accessible.name: pageSizeLabel.text
                             Layout.fillWidth: true
                             model: ["20", "50", "100"]
                             currentIndex: model.indexOf(String(browser.pacsController.pageSize))
@@ -196,20 +214,25 @@ Rectangle {
                             visible: false
                             spacing: 8
                             Caption {
+                                id: studyUidLabel
                                 text: qsTrId("text.0973")
                             }
                             Components.AppTextField {
                                 id: studyUid
+                                objectName: "pacsStudyUid"
+                                Accessible.name: studyUidLabel.text
                                 Layout.fillWidth: true
                                 onAccepted: browser.submitQuery()
                                 text: browser.pacsController.filterInputs.StudyInstanceUID || ""
                                 enabled: !browser.pacsController.busy
                             }
                             Caption {
+                                id: descriptionLabel
                                 text: qsTrId("text.0025")
                             }
                             Components.AppTextField {
                                 id: description
+                                Accessible.name: descriptionLabel.text
                                 objectName: "pacsStudyDescription"
                                 Layout.fillWidth: true
                                 onAccepted: browser.submitQuery()

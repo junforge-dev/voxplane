@@ -2,14 +2,17 @@
 import json
 from pathlib import Path
 
+import pydicom
 import pytest
 from PySide6.QtCore import QCoreApplication, QMetaObject, QObject, QPoint, QPointF, Qt
-from PySide6.QtGui import QWheelEvent
+from PySide6.QtGui import QAccessible, QImage, QWheelEvent
 from PySide6.QtTest import QTest
 
 from voxplane.ui.controller.settings_controller import SettingsController
 from test_dicom_tags import qt_app, wait_until
-from test_series_sidebar import sidebar_scene
+from test_local_import import drop_files
+from test_pacs_qml import scene
+from test_series_sidebar import phantom_series, sidebar_scene
 from test_tag_qml import find, click, type_text, descendants
 from test_display_settings_qml import select_category
 
@@ -34,6 +37,74 @@ def open_window_panel(scene):
     app.workspaceController.activeViewport._tool_controller.activateTool('window')
     QTest.qWait(100)
     return window, app, app.workspaceController.activeViewport, warnings
+
+
+@pytest.mark.parametrize("mode", ["2d", "montage"])
+def test_fractional_ct_window_round_trips_through_the_editor(scene, tmp_path, monkeypatch, mode):
+    window, app, warnings = scene
+    source = tmp_path / "quantitative-ct"
+    source.mkdir()
+    series = phantom_series(source, 1, "DEMO-CT", "1.2.3.1", "20260903")
+    for instance in series.instances:
+        ds = pydicom.dcmread(instance.path)
+        ds.RescaleType, ds.RescaleSlope, ds.RescaleIntercept = "HU", 0.0001, 0
+        ds.WindowWidth, ds.WindowCenter, ds.VOILUTFunction = 0.025, 0.105, "LINEAR_EXACT"
+        ds.save_as(instance.path, enforce_file_format=True)
+
+    assert drop_files(window, [source])
+    wait_until(lambda: app.panelController.activeSeriesUid == series.series_instance_uid)
+    click(window, find(window, "openView-" + mode))
+    view = app.workspaceController.activeViewport
+    wait_until(lambda: view.windowWidth == 0.025)
+    view._tool_controller.activateTool("window")
+    width = find(window, "windowWidthInput")
+    center = find(window, "windowCenterInput")
+    assert width.property("text") == "0.025"
+    assert center.property("text") == "0.105"
+    type_text(window, width, "0")
+    click(window, find(window, "applyWindowValues"))
+    assert "0.025" in find(window, "windowInputError").property("text")
+    assert view.windowWidth == 0.025
+    type_text(window, width, "0.0375")
+    click(window, find(window, "applyWindowValues"))
+    wait_until(lambda: view.windowWidth == 0.0375)
+    assert view.windowCenter == 0.105
+    assert width.property("text") == "0.0375"
+    if mode == "2d":
+        corner = find(window, "overlay-bottomLeft")
+        assert "WW: 0.0375   WL: 0.105" in corner.property("text")
+        item = find(window, "viewportMetadataOverlay").parentItem()
+        description = QAccessible.queryAccessibleInterface(item).text(QAccessible.Description)
+        assert "0.0375" in description and "0.105" in description
+        pixels = find(window, "dicomPixelLayer")
+        point = pixels.mapToScene(QPointF(49.5, 51.5))
+
+        def displayed_gray():
+            image = window.grabWindow()
+            scale = image.width() / window.width()
+            return image.pixelColor(round(point.x() * scale), round(point.y() * scale)).red()
+
+        # The phantom body is 0.106 HU. LINEAR_EXACT maps it to gray 134.
+        wait_until(lambda: abs(displayed_gray() - 134) <= 1)
+    else:
+        item = find(window, "montageHeader").parentItem()
+        assert any(widget.isVisible() and "WW 0.0375 / WL 0.105" in str(widget.property("text") or "")
+                   for widget in descendants(item))
+    assert window.grabWindow().save(str(tmp_path / f"fractional-ct-{mode}.png"))
+    click(window, find(window, "beginSaveWindowTemplate"))
+    assert "1" in find(window, "windowInputError").property("text")
+    assert not any(widget.isVisible() and widget.objectName() == "quickWindowTemplateName"
+                   for widget in descendants(window.contentItem()))
+    click(window, find(window, "primaryTool-export"))
+    wait_until(lambda: find(window, "rightPanel").property("exportItem") is not None)
+    export_item = find(window, "rightPanel").property("exportItem")
+    path = tmp_path / f"fractional-{mode}-export.png"
+    monkeypatch.setattr("voxplane.ui.controller.export_controller.QFileDialog.getSaveFileName",
+                        lambda *args: (str(path), "PNG"))
+    app.exportController.exportPng(export_item, 1.0, False)
+    wait_until(lambda: path.exists() and not app.exportController.busy)
+    assert not QImage(str(path)).isNull()
+    assert not warnings, warnings
 
 
 def test_window_controls_survive_resize_while_first_tab_is_constructed(sidebar_scene):

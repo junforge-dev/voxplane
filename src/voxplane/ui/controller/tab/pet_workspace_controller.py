@@ -452,7 +452,12 @@ class PetWorkspaceController(TabController):
     @Slot(float, float)
     def setCtWindow(self, center, width):
         if np.isfinite([center, width]).all():
-            self.set_ct_window(WindowLevel(center, max(1., width)))
+            self.set_ct_window(WindowLevel(center, max(self.ctMinimumWindowWidth, width)))
+
+    @Property(float, notify=settingsChanged)
+    def ctMinimumWindowWidth(self):
+        volume = self._last_result.ct_volume if self._last_result else None
+        return volume.representative_instance_meta.minimum_window_width(1.) if volume else 1.
 
     @Slot()
     def _window_display_invalidated(self):
@@ -460,12 +465,15 @@ class PetWorkspaceController(TabController):
             self.request_render()
             return
         target = self.pet_display.target
+        ct_volume = self._last_result.ct_volume if self._last_result else None
+        ct_voi = ct_volume.representative_instance_meta.voi_lut_function if ct_volume else "LINEAR_EXACT"
         for view in self._viewport_dict.values():
             pixels = view._modality_pixel
             if pixels is None:
                 continue
             if view.viewportRole == "ct":
-                image = DicomLoader.apply_window(pixels, self._ct_window, self._ct_inverted)
+                image = DicomLoader.apply_window(pixels, self._ct_window, self._ct_inverted,
+                                                 self.ctMinimumWindowWidth, voi_lut_function=ct_voi)
                 view._state = replace(view._state, window=self._ct_window, inverted=self._ct_inverted)
             else:
                 if target is None or view._frame_meta.pixel_value_meta.unit_id != target.meta.unit_id:
@@ -474,7 +482,8 @@ class PetWorkspaceController(TabController):
                 if view.viewportRole == "fusion":
                     if view._ct_pixels is None:
                         continue
-                    ct_gray = DicomLoader.apply_window(view._ct_pixels, self._ct_window, self._ct_inverted)
+                    ct_gray = DicomLoader.apply_window(view._ct_pixels, self._ct_window, self._ct_inverted,
+                                                       self.ctMinimumWindowWidth, voi_lut_function=ct_voi)
                     image = blend_pet_ct(ct_gray, gray, pixels, self._opacity, self._fusion_color)
                 else:
                     image = gray if self._pet_color == "grayscale" else pet_rgb(gray, self._pet_color)

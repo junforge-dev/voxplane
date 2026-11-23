@@ -296,6 +296,11 @@ class WorkspaceController(QObject):
         hidden = tab_hides_identity(tab, default=bool(settings and settings.section("privacy")["hideIdentity"]))
         return tab_presentation(tab, sources=sources, hide_identity=hidden)
 
+    def hides_export_identity(self, uid):
+        from voxplane.ui.reading_identity import tab_hides_identity
+        return any(tab_hides_identity(tab) for key, tab in self._tab_dict.items()
+                   if key == self._active_tab_id or any(meta.series_uid == uid for meta in tab.tab_config.series_metas if meta))
+
     @Slot(str)
     def _identity_preferences_changed(self, section):
         if section == "privacy":

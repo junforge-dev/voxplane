@@ -37,7 +37,7 @@ def test_roi_partial_to_empty_and_back_preserves_geometry_and_updates_card(viewp
     card, = shown(view, 'roiMetricCard')
     status, = shown(view, 'roiNoValidSamples')
     assert status.property('text') == '无有效像素'
-    assert not any(i.isVisible() and i.property('text') in ['Mean','SD','Min','Max'] for i in _visual_children(card))
+    assert not any(i.isVisible() and i.property('text') in ['均值', '总体标准差', '最小值', '最大值'] for i in _visual_children(card))
     _mouse_drag(view, end, start)
     restored = measure.measurementItems[0]
     assert restored['metrics']['pixel_count'] > 0
@@ -72,9 +72,38 @@ def test_fusion_card_keeps_valid_modality_statistics_and_respects_visibility(
     status = shown(view, 'roiNoValidSamples')
     assert [item.property('text') for item in status] == ([message] if message else [])
     labels = {item.property('text') for item in _visual_children(card) if item.isVisible() and item.property('text')}
-    assert ('Mean' in labels) == primary_valid
-    assert ('CT Mean' in labels) == secondary_valid
+    assert ('均值' in labels) == primary_valid
+    assert ('CT 均值' in labels) == secondary_valid
     card.setProperty('visibleMetrics', dict.fromkeys(['mean', 'std', 'minimum', 'maximum', 'count'], False))
     QTest.qWait(30)
     assert not shown(view, 'roiNoValidSamples')
+    assert not warnings, warnings
+
+
+def test_roi_statistics_reachable_from_window_accessibility_tree(viewport):
+    from PySide6.QtGui import QAccessible
+
+    view, controller, pixels, warnings = viewport
+    controller._tool_controller.selectInteraction('measure:rect')
+    _click_points(view, _scene(pixels, 30, 35), _scene(pixels, 95, 95))
+    card, = shown(view, 'roiMetricCard')
+
+    def visible_names(node):
+        if node and not node.state().invisible:
+            yield node.text(QAccessible.Text.Name)
+            for index in range(node.childCount()):
+                yield from visible_names(node.child(index))
+
+    def names():
+        return set(visible_names(QAccessible.queryAccessibleInterface(view)))
+
+    rows = card.property('rows').toVariant()
+    expected = {row['label'] + ' ' + row['value'] for row in rows}
+    assert {'mean', 'std', 'minimum', 'maximum', 'count'} == {row['key'] for row in rows}
+    assert expected <= names()
+    card.setProperty('visibleMetrics', {'mean': False, 'count': False})
+    QTest.qWait(30)
+    hidden = {row['label'] + ' ' + row['value'] for row in rows if row['key'] in {'mean', 'count'}}
+    assert names().isdisjoint(hidden)
+    assert expected - hidden <= names()
     assert not warnings, warnings

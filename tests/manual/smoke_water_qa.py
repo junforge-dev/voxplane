@@ -143,7 +143,7 @@ def main():
                 assert not qa.error and not qa.dragging
                 assert abs(adjusted["column"]-roi["column"]-8) < 1
                 assert abs(adjusted["row"]-roi["row"]-5) < 1
-                for region in qa.currentResult["rois"]:
+                for region in qa.roiItems:
                     item = find("waterQaVoi-"+region["key"])
                     expected_point = pixels.mapToItem(item, QPointF(region["column"]+.5, region["row"]+.5))
                     actual_point = item.property("center")
@@ -183,9 +183,7 @@ def main():
             pump()
             click("activeToolReset")
             assert not qa.enabled and qa.roiItems == []
-            find("waterQa-analyze").forceActiveFocus(Qt.TabFocusReason)
-            pump()
-            click("waterQa-analyze")
+            click("serviceEntry-qa")
             wait_for(lambda: qa.status == "ready")
             assert len(qa.roiItems) == 5
             assert not warnings, "\n".join(warnings)

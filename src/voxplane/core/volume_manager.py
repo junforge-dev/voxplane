@@ -8,7 +8,8 @@ from hashlib import sha256
 
 import numpy as np
 
-from voxplane.core.dicom_loader import DicomLoader, _optional_float
+from voxplane.core.ct import ct_dataset_supports_hu
+from voxplane.core.dicom_loader import DicomLoader, source_voi
 from voxplane.core.render_cancellation import check_render_cancelled
 from voxplane.model import (
     DicomInstanceMeta,
@@ -239,7 +240,8 @@ class VolumeManager:
             )
 
         frames = _read_volume_frames(
-            tuple(instance for _, instance in positioned_instances), series.modality.upper()
+            tuple(instance for _, instance in positioned_instances), series.modality.upper(),
+            series.pet_series_start,
         )
         volume_pixels = frames.pixels
 
@@ -373,7 +375,7 @@ class _VolumeFrames:
     representative_meta: InstanceDisplayMeta
 
 
-def _read_volume_frames(instances: tuple[DicomInstanceMeta, ...], modality: str) -> _VolumeFrames:
+def _read_volume_frames(instances: tuple[DicomInstanceMeta, ...], modality: str, pet_series_start: str) -> _VolumeFrames:
     """Decode validated, spatially ordered frames without retaining duplicate volumes."""
     first = instances[0]
     shape = (len(instances), first.rows, first.columns)
@@ -395,13 +397,6 @@ def _read_volume_frames(instances: tuple[DicomInstanceMeta, ...], modality: str)
         check_render_cancelled()
         dataset, modality_pixels = loader.read_frame(instance.path, instance.frame_index)
 
-        if modality == "MR" and mr_source_window is None:
-            center = _optional_float(getattr(dataset, "WindowCenter", None))
-            width = _optional_float(getattr(dataset, "WindowWidth", None))
-            if (center is not None and width is not None
-                    and np.isfinite(center) and np.isfinite(width) and width >= .001):
-                mr_source_window = WindowLevel(center, width)
-
         if modality_pixels.ndim != 2:
             raise VolumeBuildError(
                 f"Only single-frame 2D instances are currently "
@@ -414,13 +409,19 @@ def _read_volume_frames(instances: tuple[DicomInstanceMeta, ...], modality: str)
                 f"shape={modality_pixels.shape}"
             )
 
-        display_pixels, value_meta, value_scale = loader.to_display_values(dataset, modality_pixels)
+        display_pixels, value_meta, value_scale = loader.to_display_values(
+            dataset, modality_pixels, pet_series_start=pet_series_start,
+        )
+        if modality == "CT" and not ct_dataset_supports_hu(dataset):
+            raise VolumeBuildError(_msg("ct.unsupportedUnits"))
         value_metas.append(value_meta)
         if index == 0:
             if value_meta.source_unit == "BQML":
                 source_pixels = np.empty(shape, dtype=np.float32)
             if modality == "PT":
-                _, source_meta, _ = loader.to_display_values(dataset, modality_pixels, preferred_unit="source")
+                _, source_meta, _ = loader.to_display_values(
+                    dataset, modality_pixels, preferred_unit="source", pet_series_start=pet_series_start,
+                )
         if default_window is None:
             default_window = loader.resolve_window(
                 dataset=dataset,
@@ -432,6 +433,13 @@ def _read_volume_frames(instances: tuple[DicomInstanceMeta, ...], modality: str)
             representative_meta = loader.extract_instance_meta(
                 dataset
             )
+
+        if modality == "MR" and mr_source_window is None:
+            mr_source_window, function = source_voi(dataset)
+            if mr_source_window is not None:
+                # The first usable source window can belong to a later slice.
+                representative_meta = replace(representative_meta,
+                    voi_lut_function=function, continuous_width_limit=mr_source_window.width)
 
         if modality == "PT":
             pet_windows.append(loader.resolve_window(dataset, None, display_pixels,

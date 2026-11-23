@@ -13,22 +13,31 @@ Components.AppDialog {
     objectName: "exportDialog"
     property var controller: null
     property var settingsController: null
+    readonly property bool dicomFormat: format.currentIndex === 0
     signal manualRequested()
     parent: Basic.Overlay.overlay
     anchors.centerIn: parent
-    width: Math.min(560, parent ? parent.width - 32 : 560)
-    height: Math.min(560, parent ? parent.height - 32 : 560)
+    width: Math.min(620, parent ? parent.width - 32 : 620)
+    height: Math.min(620, parent ? parent.height - 32 : 620)
     closeEnabled: !!controller && !controller.busy
     closeButtonName: "exportDialogClose"
     modal: true
     title: controller && controller.anonymousLocked ? qsTrId("text.0646") : qsTrId("text.0647")
     padding: 16
-    onClosed: { if (controller) controller.closeDialog() }
+    onClosed: { preview.close(); if (controller) controller.closeDialog() }
+
+    ExportFramePreview {
+        id: preview
+        controller: dialog.controller
+        fileFormat: dialog.dicomFormat ? "dicom" : "png"
+    }
 
     Connections {
         target: dialog.controller
         function onDialogChanged() {
             if (dialog.controller.dialogOpen) {
+                preview.close()
+                exportScroll.contentItem.contentY = 0
                 format.currentIndex = 0
                 anonymous.checked = true
                 dialog.open()
@@ -46,11 +55,23 @@ Components.AppDialog {
         Basic.ScrollBar.vertical: Components.AppScrollBar {}
         ColumnLayout {
             width: exportScroll.availableWidth
-            spacing: 14
+            spacing: 9
             Text {
+                objectName: "exportSourceSummary"
                 Layout.fillWidth: true
-                text: I18n.format(qsTrId("export.seriesCount"), {count: dialog.controller ? dialog.controller.instanceCount : 0})
-                color: Theme.textMuted
+                text: dialog.controller?.sourceDescription ?? ""
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                color: Theme.textPrimary
+                font.pixelSize: 13
+            }
+            Text {
+                objectName: "exportSelectionCount"
+                Layout.fillWidth: true
+                text: I18n.format(qsTrId("export.selectionCount"), {frames: dialog.controller?.selectedFrameCount ?? 0,
+                                                                     files: dialog.controller?.sourceFileCount ?? 0})
+                color: Theme.textSecondary
+                wrapMode: Text.Wrap
                 font.pixelSize: 13
             }
             RowLayout {
@@ -66,28 +87,51 @@ Components.AppDialog {
             }
             Text {
                 Layout.fillWidth: true
-                visible: dialog.controller?.containsFrameGroups ?? false
-                text: qsTrId("mr.frameExportNotice")
-                color: Theme.textMuted
-                font.pixelSize: 12
+                objectName: "exportOutputCount"
+                text: dialog.dicomFormat
+                    ? I18n.format(qsTrId("export.dicomCount"), {files: dialog.controller?.sourceFileCount ?? 0,
+                                                                 frames: dialog.controller?.sourceFrameCount ?? 0})
+                      + (dialog.controller?.selectedFrameCount < dialog.controller?.sourceFrameCount
+                         ? "\n" + qsTrId("mr.frameExportNotice") : "")
+                    : I18n.format(qsTrId("export.pngCount"), {frames: dialog.controller?.selectedFrameCount ?? 0})
+                color: Theme.textSecondary
+                font.pixelSize: 13
                 wrapMode: Text.Wrap
             }
             Components.AppCheckBox {
                 id: anonymous
                 objectName: "exportAnonymous"
-                text: qsTrId("text.0141")
+                text: dialog.dicomFormat ? qsTrId("export.anonymousTags") : qsTrId("export.anonymousPng")
                 checked: true
                 enabled: dialog.controller && !dialog.controller.busy && !dialog.controller.anonymousLocked
             }
-            Components.AppLinkButton {
-                objectName: "seriesExportManualLink"
+            Text {
+                objectName: "exportPixelNotice"
                 Layout.fillWidth: true
-                text: qsTrId("text.0651")
-                enabled: !dialog.controller?.busy
-                tooltip: qsTrId("text.0652")
-                onClicked: {
-                    dialog.close()
-                    dialog.manualRequested()
+                text: qsTrId("export.pixelNotice")
+                wrapMode: Text.Wrap
+                color: Theme.textPrimary
+                font.pixelSize: 13
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Components.AppButton {
+                    objectName: "reviewExportFrames"
+                    text: qsTrId("export.reviewFrames")
+                    compact: true
+                    enabled: !dialog.controller?.busy && dialog.controller?.sourceFileCount > 0
+                    onClicked: preview.open()
+                }
+                Components.AppLinkButton {
+                    objectName: "seriesExportManualLink"
+                    Layout.fillWidth: true
+                    text: qsTrId("text.0651")
+                    enabled: !dialog.controller?.busy
+                    tooltip: qsTrId("text.0652")
+                    onClicked: {
+                        dialog.close()
+                        dialog.manualRequested()
+                    }
                 }
             }
             Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.dividerColor }
@@ -156,7 +200,7 @@ Components.AppDialog {
             objectName: "startExport"
             text: dialog.controller?.outputDirectory ? qsTrId("export.again") : qsTrId("text.0657")
             actionRole: "primary"
-            enabled: dialog.controller && !dialog.controller.busy && dialog.controller.instanceCount > 0
+            enabled: dialog.controller && !dialog.controller.busy && dialog.controller.sourceFileCount > 0
             onClicked: dialog.controller.startExport(format.currentIndex === 0 ? "dicom" : "png", anonymous.checked)
         }
     }

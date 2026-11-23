@@ -85,6 +85,62 @@ def test_report_renders_each_source_and_groups_same_slice(qt_app, tmp_path):
         app.shutdown()
 
 
+def test_report_exports_recorded_fwhm_methods_across_slices(qt_app, tmp_path):
+    import csv
+    import io
+    from PySide6.QtPdf import QPdfDocument
+    from voxplane.core.measurement_report import csv_bytes, pdf_bytes
+    from voxplane.i18n.messages import builtin
+
+    app, _ = populated_app(tmp_path)
+    try:
+        ws = app.workspaceController
+        view = ws.activeViewport
+        fwhm = view.fwhmController
+        labels = builtin('en-US')['messages']
+        method_keys = ['ramp.usedHalfHeight', 'mtf.usedGaussian', 'ramp.usedHalfHeight']
+        for index, method in enumerate(('direct_fft', 'gaussian', 'gaussian')):
+            view.setSliceIndex(index)
+            wait_until(lambda: view._frame_meta.slice_index == index and not view.render_pending)
+            fwhm.setAnalysisMethod(method)
+            row_mm, col_mm = view._frame_meta.instance_meta.pixel_spacing
+            # Crop the last profile at the peak. It cannot reach Gaussian fitting.
+            center, width = (38, 20) if index == 2 else (48, 36)
+            assert fwhm.applyRoi(center, 61 + index, width * col_mm, 2 * row_mm)
+            wait_until(lambda: fwhm.status != 'calculating')
+            assert fwhm.status == 'ready', fwhm.error
+            assert fwhm.actualAnalysisMethod == ('gaussian' if index == 1 else 'half_height')
+
+        snapshot = loads(dumps(fwhm.persistent_state()))
+        for record in snapshot['records'].values():
+            record.pop('presented')
+        fwhm.reset()
+        fwhm.restore_state(snapshot)
+        rows, pictures, _ = capture_results(ws, app._series_catalog, include_images=True)
+        assert [r['slice'] for r in rows] == [1, 2, 3]
+        assert all(r['kind'] == 'FWHM' and r['angle_deg'] == 23 for r in rows)
+        assert rows[-1]['fwhm_mm'] is None and rows[-1]['slice_thickness_mm'] is None
+        images, warnings = render_references(pictures, app._series_catalog, Event(), lambda _: None)
+        assert len(images) == 3 and not warnings, warnings
+        entries = list(csv.DictReader(io.StringIO(csv_bytes(rows, translations=labels).decode('utf-8-sig'))))
+        assert [entry[labels['mtf.details']] for entry in entries] == [labels[key] for key in method_keys]
+        assert entries[0]['FWHM (mm)'] and entries[1]['FWHM (mm)'] and not entries[2]['FWHM (mm)']
+
+        target = tmp_path / 'fwhm.pdf'
+        target.write_bytes(pdf_bytes(rows, translations=labels))
+        doc = QPdfDocument()
+        assert doc.load(str(target)) == QPdfDocument.Error.None_
+        pdf = ' '.join(' '.join(doc.getAllText(i).text().split()) for i in range(doc.pageCount()))
+        doc.close()
+        for index, key in enumerate(method_keys):
+            block = pdf.split(rows[index]['id'], 1)[1]
+            if index + 1 < len(rows):
+                block = block.split(rows[index+1]['id'], 1)[0]
+            assert labels[key] in block
+    finally:
+        app.shutdown()
+
+
 def test_mpr_location_and_reference_leave_other_views_unchanged(qt_app, tmp_path):
     app, series = populated_app(tmp_path)
     try:

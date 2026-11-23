@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from PySide6.QtCore import QSize
 from voxplane.model import WindowLevel
 from voxplane.core.scalar_display import ScalarDisplayFrame, pack_scalar, unpack_scalar, resample_display
@@ -10,6 +11,23 @@ def test_scalar_interpolation_precedes_window_clipping():
     assert image[1,1] == 0  # gray-first interpolation would incorrectly produce 51
     assert image[1,0] == 102
     np.testing.assert_array_equal(frame.pixels, [[-50,-302],[-50,-302]])
+
+
+@pytest.mark.parametrize("function,width,expected", [
+    ("LINEAR", 1., [0, 0, 255, 255, 255]),
+    ("SIGMOID", 100., [4, 30, 127, 224, 250]),
+    ("LINEAR_EXACT", 100., [0, 0, 127, 255, 255]),
+])
+def test_scalar_voi_on_uniform_source_samples(function, width, expected):
+    values = np.array([[-100., -50., 0., 50., 100.]], dtype=np.float32)
+    frame = ScalarDisplayFrame(values, WindowLevel(0., width), voi_lut_function=function)
+    np.testing.assert_array_equal(resample_display(frame, 5, 1)[0], expected)
+
+
+def test_resampling_does_not_speckle_a_constant_plane_at_the_binary_threshold():
+    frame = ScalarDisplayFrame(np.full((7, 5), -30.5, np.float32), WindowLevel(-30., 1.),
+                               voi_lut_function="LINEAR")
+    assert not resample_display(frame, 111, 87).any()
 
 
 def test_packed_texture_precision_padding_and_byte_boundaries():
@@ -81,15 +99,22 @@ Item {
     view.setSource(QUrl.fromLocalFile(str(qml)))
     assert view.status() == QQuickView.Ready, view.errors()
     view.show()
-    p = np.array([[-50.,-302.,200.],[50.,-80.,np.nan]],np.float32)
+    # The first texel sits exactly on the DICOM W=1 threshold.
+    p = np.array([[-30.5,-999.,1000.],[50.,-80.,np.nan]],np.float32)
     try:
-        for revision, (inverted, palette) in enumerate(((False,'grayscale'),(True,'grayscale'),(False,'hotIron'))):
+        windows = [
+            ('LINEAR_EXACT', 200, False, 'grayscale'),
+            ('LINEAR', 1, False, 'grayscale'),
+            ('LINEAR', 50, True, 'grayscale'),
+            ('SIGMOID', 200, False, 'hotIron'),
+        ]
+        for revision, (function, width, inverted, palette) in enumerate(windows):
             encoded, minimum, span = pack_scalar(p)
-            frame=ScalarDisplayFrame(p,WindowLevel(-30,200),inverted,palette,encoded,minimum,span)
+            frame=ScalarDisplayFrame(p,WindowLevel(-30,width),inverted,palette,encoded,minimum,span,function)
             provider.set_scalar('render',frame)
             view.rootObject().setProperty('descriptor',dict(source=f'image://dicom/render:scalar/{revision}',
                 cpu=f'image://dicom/render:scalar-cpu/{revision}',lut=f'image://dicom/render:lut/{palette}',
-                minimum=minimum,span=span,lower=-130,width=200,inverted=inverted))
+                minimum=minimum,span=span,center=-30,width=width,inverted=inverted,voiFunction=function))
             QTest.qWait(100)
             image=view.grabWindow().convertToFormat(QImage.Format_RGB888)
             assert not image.isNull()
@@ -102,7 +127,7 @@ Item {
             fallback=view.rootObject().findChild(QObject,'scalarDisplayFallback')
             import os
             if os.environ.get('QSG_RHI_BACKEND') in ('metal', 'd3d11'):
-                assert root.property('useShader'), 'Native RHI verification must exercise the shader'
+                assert root.property('useShader') == (function != 'LINEAR' or width > 1)
             if root.property('useShader'):
                 assert not fallback.property('source').toString()
             else:

@@ -70,10 +70,13 @@ def display_parameters(view):
     return result
 
 
-def frame_identity(series_uid, frame, projection=None, slab=0., role="", phase=None):
+def frame_identity(series_uid, frame, projection=None, slab=0., role="", phase=None, *, include_source_spacing=False):
     geometry = frame.geometry
     pose = (geometry.pixel_spacing.row, geometry.pixel_spacing.column,
             *(geometry.image_position_patient or ()), *(geometry.image_orientation_patient or ()))
+    if include_source_spacing:
+        # Service ROI records also identify the original spacing used for analysis.
+        pose += tuple(frame.instance_meta.pixel_spacing or ())
     key = (series_uid, frame.instance_meta.sop_instance_uid, frame.slice_index,
            geometry.rows, geometry.columns, tuple(round(float(v), 7) for v in pose))
     context = ()

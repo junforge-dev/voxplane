@@ -27,6 +27,7 @@ Item {
     signal pointerPressedAt(point position, int buttons)
     signal pointerTapFinished()
 
+    signal contextRequested(point position)
     signal tapped(point position)
     signal finishMeasurementRequested()
     signal toolChangedDuringDrag()
@@ -123,6 +124,7 @@ Item {
     readonly property int effectiveCursorShape: precisionCursor ? Qt.CrossCursor
         : customCursorActive ? Qt.BlankCursor : Qt.ArrowCursor
 
+    readonly property bool hovering: hoverHandler.hovered && !pointerPressed
     readonly property point cursorPosition:
         dragHandler.active
             ? dragHandler.centroid.position
@@ -226,7 +228,10 @@ Item {
                 interactionLayer.finishMeasurementRequested()
         }
         onTapped: (eventPoint, button) => {
-            // 只有左键点击执行测量选择等 tapped 逻辑。
+            if (button === Qt.RightButton) {
+                interactionLayer.contextRequested(eventPoint.position)
+                return
+            }
             if (button !== Qt.LeftButton)
                 return
             if (interactionLayer.fixedPointPressed)

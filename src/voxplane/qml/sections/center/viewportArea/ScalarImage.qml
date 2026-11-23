@@ -10,7 +10,10 @@ Item {
     readonly property var scalar: controller?.scalarDisplay ?? ({})
     readonly property bool available: !!scalar.source
     readonly property bool gpu: GraphicsInfo.api !== GraphicsInfo.Software && GraphicsInfo.api !== GraphicsInfo.Unknown
-    readonly property bool useShader: available && gpu && effect.status !== ShaderEffect.Error
+    // 24-bit texture packing can move a value exactly on a binary threshold
+    // across it. Use the original scalar samples for this discontinuous VOI.
+    readonly property bool binaryWindow: scalar.voiFunction === "LINEAR" && scalar.width <= 1
+    readonly property bool useShader: available && gpu && !binaryWindow && effect.status !== ShaderEffect.Error
     Image {
         id: texture
         source: root.useShader ? root.scalar.source : ""
@@ -32,9 +35,11 @@ Item {
         property var source: texture
         property var colorLut: lutTexture
         property vector4d dataRange: Qt.vector4d(root.scalar.minimum ?? 0,root.scalar.span ?? 1,
-                                               root.scalar.lower ?? 0,root.scalar.width ?? 1)
+                                               root.scalar.center ?? 0,root.scalar.width ?? 1)
         property vector2d imageSize: Qt.vector2d(root.width,root.height)
         property real inverted: root.scalar.inverted ? 1 : 0
+        property int windowFunction: root.scalar.voiFunction === "LINEAR" ? 1
+                                   : root.scalar.voiFunction === "SIGMOID" ? 2 : 0
         fragmentShader: "../../../shaders/scalar_display.frag.qsb"
         blending: false
     }

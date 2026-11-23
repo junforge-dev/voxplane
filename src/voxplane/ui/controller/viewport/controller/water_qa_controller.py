@@ -88,10 +88,10 @@ class WaterQaController(QObject):
     stateChanged = Signal()
     settingsChanged = Signal()
 
-    def __init__(self, modality, parent=None):
+    def __init__(self, modality, parent=None, *, supports_ct_analysis=True):
         super().__init__(parent)
         self._settings_controller = resolve_settings(parent)
-        self._modality = modality.strip().upper()
+        self._available = modality.strip().upper() == "CT" and supports_ct_analysis
         from voxplane.ui.controller.report_preview_controller import ReportPreviewController
         self._preview = ReportPreviewController(self)
         self._preview_request = None
@@ -175,7 +175,7 @@ class WaterQaController(QObject):
                 self._records.pop(key, None)
             else:
                 self._records[key] = record
-        self._enabled = (bool(self._records) if self._history_enabled is None else self._history_enabled)
+        self._enabled = self.available and (bool(self._records) if self._history_enabled is None else self._history_enabled)
         self._settings = self._history_settings or WaterQaSettings()
         self._restored = state.get("restored", self._history_restored_baseline)
         if not self._restore_current_record() and self._enabled:
@@ -202,7 +202,7 @@ class WaterQaController(QObject):
         self._cache.clear()
         self._restored = bool(state.get("records") or state.get("enabled", False))
         self._history_restored_baseline = self._restored
-        self._enabled = state.get("enabled", False)
+        self._enabled = self.available and state.get("enabled", False)
         self._air_attempted = set(state.get("airAttempted", []))
         self._air_unavailable.clear()
         self._settings = state.get("settings", WaterQaSettings())
@@ -240,7 +240,7 @@ class WaterQaController(QObject):
 
     @Property(bool, constant=True)
     def available(self):
-        return self._modality == "CT"
+        return self._available
 
     @Property(bool, notify=stateChanged)
     def enabled(self):

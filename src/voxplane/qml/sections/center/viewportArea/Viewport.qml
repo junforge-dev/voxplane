@@ -1,6 +1,7 @@
 pragma
 ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Controls.Basic as Basic
 import "../../../theme"
 import "../../../components" as Components
 
@@ -31,11 +32,16 @@ Item {
     Accessible.description: qsTrId("view.accessibleState")
         .arg((viewportController?.sliceIndex ?? 0) + 1)
         .arg(viewportController?.sliceCount ?? 0)
-        .arg(viewportController?.windowWidth ?? "—")
-        .arg(viewportController?.windowCenter ?? "—")
+        .arg(String(viewportController?.windowWidth ?? "—"))
+        .arg(String(viewportController?.windowCenter ?? "—"))
         .arg(viewportController?.loadState ?? "")
         + (viewportController?.errorMessage ? " · " + viewportController.errorMessage : "")
     Keys.enabled: !viewportRoot.Window.window?.shortcutPopupOpen
+    property bool rightClickPending: false
+    Keys.onShortcutOverride: event => {
+        if (viewportRoot.rightClickPending)
+            viewportRoot.rightClickPending = false
+    }
     Keys.onEscapePressed: event => {
         if (viewportRoot.cprKeysActive && viewportRoot.viewportController?.cprCancel?.()) {
             viewportRoot.cprDragging = false
@@ -141,6 +147,7 @@ Item {
         reservedRegions: viewportRoot.labelReservedRegions
         instructionBottomMargin: viewportRoot.drawingInstructionInset
         id: imageCanvas
+        hoverSource: interactionLayer
         anchors.fill: parent
         z: 0
         viewportController: viewportRoot.viewportController
@@ -346,8 +353,57 @@ Item {
         transformState: imageCanvas.measurementTransformState
     }
 
+    Basic.Menu {
+        id: roiMenu
+        parent: viewportRoot
+        popupType: Basic.Popup.Item
+        readonly property string issue: visible ? viewportRoot.viewportController?.roiPasteUnavailableReason ?? "roiPaste.notReady" : ""
+        padding: 6
+        width: Math.min(issue ? 300 : pasteAction.implicitWidth + 12, viewportRoot.width)
+        margins: 4
+        background: Rectangle {
+            radius: 6
+            color: Theme.panelBackground
+            border.color: Theme.controlBorder
+        }
+        Basic.MenuItem {
+            id: pasteAction
+            objectName: "pasteRoiInPlaceAction"
+            enabled: !roiMenu.issue
+            text: qsTrId("roiPaste.action")
+            Accessible.description: roiMenu.issue ? qsTrId(roiMenu.issue) : ""
+            contentItem: Column {
+                spacing: 3
+                Text {
+                    text: pasteAction.text
+                    color: pasteAction.enabled ? Theme.textPrimary : Theme.textDisabled
+                }
+                Text {
+                    objectName: "roiPasteReason"
+                    width: parent.width
+                    visible: !!roiMenu.issue
+                    text: roiMenu.issue ? qsTrId(roiMenu.issue) : ""
+                    color: Theme.textMuted
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
+                }
+            }
+            background: Rectangle {
+                radius: 4
+                color: pasteAction.highlighted && pasteAction.enabled ? Theme.controlHover : "transparent"
+            }
+            onTriggered: viewportRoot.viewportController?.pasteRoiInPlace()
+        }
+    }
+
     InteractionLayer {
         id: interactionLayer
+        onContextRequested: point => {
+            if (viewportRoot.rightClickPending && viewportRoot.viewportController?.viewportType === "stack") {
+                viewportRoot.rightClickPending = false
+                roiMenu.popup(point.x, point.y)
+            }
+        }
         ViewportPinchHandler {
             viewportController: viewportRoot.viewportController
         }
@@ -377,6 +433,10 @@ Item {
             border.color: Theme.drawingLineColor(viewportRoot.viewportController?.settingsController?.values.measurement ?? ({}), true)
         }
         onPointerPressedAt: (position, buttons) => {
+            viewportRoot.rightClickPending = buttons === Qt.RightButton
+                && viewportRoot.viewportController?.viewportType === "stack"
+            if (viewportRoot.rightClickPending)
+                viewportRoot.forceActiveFocus()
             const controller = viewportRoot.viewportController
             controller?.setBrushViewMetrics?.(imageCanvas.pixelsPerMillimeter, Math.min(width, height))
             const hit = imageCanvas.mapToDicomPixel(interactionLayer, position)

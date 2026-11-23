@@ -21,7 +21,7 @@
       },
       {
         "title": "CT 与 PET 单位",
-        "body": "CT 使用 **HU**；PET 以实际提供的 SUVbw、原生 SUV 或活度单位为准，不补造缺失的 SUV。定量分割与 VOI 在 CT/PET 的 **MPR** 或 CT 的 **4D** 中进行；4D 使用当前时相的原始体素。",
+        "body": "常规 CT 使用 **HU**。派生 CT 按影像声明的单位显示，HU 分析仅用于 HU 灰度影像。PET 以实际提供的 SUVbw、原生 SUV 或活度单位为准，不补造缺失的 SUV。定量分割与 VOI 在 CT/PET 的 **MPR** 或 CT 的 **4D** 中进行；4D 使用当前时相的原始体素。",
         "messageId": "manual.quantification.section0"
       },
       {

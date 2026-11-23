@@ -15,6 +15,7 @@ from voxplane.core.pixel_codecs import iter_decoded_pixels, PixelDecodeError
 
 from voxplane.core.dicom_anonymizer import Anonymizer, check_pixel_identity
 from voxplane.core.export_images import frame_image
+from voxplane.model import DicomInstanceMeta
 
 
 class ExportCancelled(Exception):
@@ -26,18 +27,60 @@ class ExportError(ValueError):
 
 
 @dataclass(frozen=True)
+class ExportSource:
+    instance: DicomInstanceMeta
+    selected: tuple[int, ...] | None
+
+    def frames(self, file_format):
+        if file_format == "png" and self.selected is not None:
+            return self.selected
+        return range(self.instance.number_of_frames)
+
+    def check_header(self, header):
+        instance = self.instance
+        identity = (("SOPInstanceUID", instance.sop_instance_uid), ("StudyInstanceUID", instance.study_instance_uid),
+                    ("SeriesInstanceUID", instance.series_instance_uid), ("PatientID", instance.patient_id),
+                    ("PatientName", instance.patient_name), ("StudyDate", instance.study_date),
+                    ("SeriesDescription", instance.series_description), ("StudyDescription", instance.study_description))
+        if (any(str(header.get(key) or "") != value for key, value in identity)
+                or max(1, int(header.get("NumberOfFrames", 1))) != instance.number_of_frames):
+            raise ExportError(_msg("export.sourceChanged"))
+
+
+def export_sources(instances):
+    """Group the selected browser frames by physical file in export order."""
+    files = {}
+    indices = {}
+    for instance in instances:
+        files.setdefault(instance.path, instance)
+        if instance.frame_index is not None:
+            indices.setdefault(instance.path, set()).add(instance.frame_index)
+    return tuple(ExportSource(instance, tuple(sorted(indices[path])) if path in indices else None)
+                 for path, instance in files.items())
+
+
+@dataclass(frozen=True)
 class ExportRequest:
     paths: tuple[Path, ...]
     directory: Path
     format: str = "dicom"
     anonymous: bool = True
     frames: tuple[tuple[Path, int], ...] = ()
+    sources: tuple[ExportSource, ...] = ()
+
+    @classmethod
+    def from_sources(cls, sources, directory, file_format, anonymous):
+        paths = tuple(source.instance.path for source in sources)
+        frames = tuple((source.instance.path, index) for source in sources for index in source.selected or ())
+        return cls(paths, directory, file_format, anonymous, frames, sources)
 
 
 @dataclass(frozen=True)
 class ExportResult:
     directory: Path
     file_count: int
+    frame_count: int
+    format: str
 
 
 def export_series(request: ExportRequest, *, cancel=None, progress=None):
@@ -70,11 +113,15 @@ def export_series(request: ExportRequest, *, cancel=None, progress=None):
             check_cancelled()
             try:
                 header = pydicom.dcmread(path, stop_before_pixels=True)
+                if request.sources:
+                    request.sources[index - 1].check_header(header)
                 if request.anonymous:
                     check_pixel_identity(header)
                 count = max(1, int(getattr(header, "NumberOfFrames", 1)))
                 if path in selections and max(selections[path]) >= count: raise ValueError("Invalid frame index")
-                frame_counts.append(len(selections[path]) if path in selections else count)
+                frame_counts.append(len(selections[path]) if request.format == "png" and path in selections else count)
+            except ExportError:
+                raise
             except ValueError as exc:
                 if error_message(exc).startswith(_msg('text.0141')):
                     raise ExportError(error_message(exc)) from exc
@@ -129,7 +176,7 @@ def export_series(request: ExportRequest, *, cancel=None, progress=None):
         destination = root / name
         stage.rename(destination)
         stage = None
-        return ExportResult(destination, completed)
+        return ExportResult(destination, completed, sum(frame_counts), request.format)
     except (ExportCancelled, ExportError):
         raise
     except OSError as exc:

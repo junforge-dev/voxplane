@@ -96,3 +96,37 @@ def test_window_template_edit_reveals_expands_and_focuses_form(scene):
     assert find(window, 'windowTemplateWidth').property('text') == '800'
     assert find(window, 'windowTemplateCenter').property('text') == '50'
     assert not warnings, warnings
+
+
+def test_search_opens_unique_shortcut_category_with_enter(scene):
+    from PySide6.QtCore import Qt
+    from test_tag_qml import descendants, type_text
+
+    window, app, warnings = open_page(scene, 'appearance')
+    app.languageController.selectLanguage('en-US')
+    search = find(window, 'settingsSearch')
+    click(window, search)
+    type_text(window, search, 'Paste ROI in place')
+    assert find_any(window, 'settingsCategory-input').isVisible()
+    QTest.keyClick(window, Qt.Key_Return)
+    assert app.settingsController.activeCategory == 'input'
+    assert find(window, 'shortcutRecord-paste-roi-in-place').isVisible()
+    assert not any(item.objectName() == 'shortcutRecord-pan' and item.isVisible()
+                   for item in descendants(window.contentItem()))
+    search.setProperty('text', '')
+    assert find(window, 'shortcutRecord-pan').isVisible()
+    assert not warnings, warnings
+
+
+def test_shortcut_buttons_identify_the_action_and_value_to_assistive_tools(scene):
+    from PySide6.QtGui import QAccessible
+
+    window, app, warnings = open_page(scene, 'input')
+    app.languageController.selectLanguage('en-US')
+    for prefix in ('shortcutRecord-', 'shortcutClear-'):
+        button = find(window, prefix + 'paste-roi-in-place')
+        name = QAccessible.queryAccessibleInterface(button).text(QAccessible.Name)
+        assert 'Paste ROI in place on this slice' in name
+        expected = button.property('text') if prefix == 'shortcutRecord-' else 'Unbind'
+        assert expected in name
+    assert not warnings, warnings

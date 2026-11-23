@@ -129,8 +129,13 @@ class PetReconstructor:
             pet_gray = self._cached(pet_gray_key, lambda: DicomLoader.apply_window(pet_pixels, pet_window, False, minimum))
             if ct:
                 sampled_ct = sampled_reference
-                ct_gray_key = ("display", ref_key, ct_window, "gray", request.ct_inverted)
-                ct_gray = self._cached(ct_gray_key, lambda: DicomLoader.apply_window(sampled_ct, ct_window, request.ct_inverted))
+                ct_meta = ct.representative_instance_meta
+                ct_gray_key = ("display", ref_key, ct_window, "gray", request.ct_inverted,
+                               ct_meta.voi_lut_function)
+                ct_gray = self._cached(ct_gray_key, lambda: DicomLoader.apply_window(
+                    sampled_ct, ct_window, request.ct_inverted,
+                    minimum_width=ct_meta.minimum_window_width(1.0),
+                    voi_lut_function=ct_meta.voi_lut_function))
                 if role == "fusion":
                     ct_samples = sampled_ct
                     overlap = self._cached(("overlap", ref_key, pet_key),

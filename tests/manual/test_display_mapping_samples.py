@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import numpy as np
 import pytest
+from PySide6.QtCore import QUrl
 from PySide6.QtTest import QTest
 from voxplane.model import WindowLevel
 from test_dicom_tags import qt_app,wait_until
@@ -101,25 +102,63 @@ def test_real_pet_ct_stack_mpr_fusion_and_volume(scene,library,tmp_path):
         assert all(v._modality_pixel is not None for v in tab.viewports_by_id.values())
     fusion_tab=ws.activeTab
     ws.createTab(pet.series_instance_uid,'PET 3D','3d');ready(ws)
-    v=ws.activeViewport;wait_until(lambda:v._host is not None,timeout=15000)
-    source=v.volume.modality_pixels.copy();v.setPetUpper(v.petUpper*.8);QTest.qWait(180)
+    v=ws.activeViewport
+    wait_until(lambda: v.exportReady, timeout=15000)
+    source=v.volume.modality_pixels.copy();v.setPetUpper(v.petUpper*.8)
     np.testing.assert_array_equal(v.volume.modality_pixels,source)
     assert not v.snapshot_image().isNull()
     ws.createFusionVolumeTab(fusion_tab);ready(ws)
-    v=ws.activeViewport;wait_until(lambda:v._host is not None,timeout=15000)
-    QTest.qWait(180);assert not v.snapshot_image().isNull()
+    v=ws.activeViewport
+    wait_until(lambda: v.exportReady, timeout=15000)
+    assert not v.snapshot_image().isNull()
     assert not warnings,warnings
 
 
-def test_real_ct_four_d_display_and_phase_switch(scene,library):
-    window,app,warnings=scene
-    import_local(app,[library/'P113_dicom/MP1']);ws=app.workspaceController
-    series=next(s for s in app.panelController._scan_series_record.values() if s.supports_four_d)
-    ws.createTab(series.series_instance_uid,'CT 4D','4d');ready(ws)
-    tab=ws.activeTab;v=ws.activeViewport
-    assert v.displayMapping['kind']=='window'
-    v.applyWindowPreset(45,350)
-    tab.setPhaseIndex(1)
-    wait_until(lambda:tab._current_phase_index==1 and ws.activeLoadState.status=='ready',timeout=30000)
-    assert all(v.current_window==WindowLevel(45,350) for v in tab.viewports_by_id.values())
-    assert not warnings,warnings
+def test_real_unspecified_ct_phases_remain_browsable_in_2d(scene, library):
+    window, app, warnings = scene
+    panel = app.panelController
+    import_local(app, [library / 'P113_dicom/MP1'])
+    records = list(panel._scan_series_record.values())
+    assert len(records) == 10 and all(s.phase_count == 10 for s in records)
+    assert all(len(s.instances) == 99 and not s.supports_four_d for s in records)
+    series = records[0]
+    panel.selectSeries(series.series_instance_uid)
+    assert not find(window, 'openView-4d').isEnabled()
+    assert panel.seriesViewError(series.series_instance_uid, '4d')
+    ws = app.workspaceController
+    ws.createTab(series.series_instance_uid, 'Derived CT', '2d')
+    ready(ws)
+    assert ws.activeViewport.displayMapping['unit'] == 'a.u.'
+    assert not warnings, warnings
+
+
+def test_real_ct_four_d_display_and_phase_switch(scene, library):
+    window, app, warnings = scene
+    panel = app.panelController
+    archive = library / '10-21-1997-NA-p4-86157.7z'
+    assert archive.is_file()
+    assert panel.importUrls([QUrl.fromLocalFile(str(archive))])
+    wait_until(lambda: not panel.scanning, timeout=120000)
+    assert not panel.importError, panel.importError
+    candidates = [s for s in panel._scan_series_record.values() if s.supports_four_d]
+    assert len(candidates) == 10
+    series = min(candidates, key=lambda s: s.initial_phase_identifier)
+    assert series.phase_count == 10 and len(series.instances) == 149
+    ws = app.workspaceController
+    panel.selectSeries(series.series_instance_uid)
+    click(window, find(window, 'openView-4d'))
+    wait_until(lambda: ws.activeTabType == '4d' and ws.activeLoadState.status == 'ready',
+               timeout=30000)
+    tab = ws.activeTab
+    axial = next(v for v in tab.viewports_by_id.values() if v.viewportType == 'axial')
+    assert axial.displayMapping['kind'] == 'window' and axial.displayMapping['unit'] == 'HU'
+    assert axial.overlayInfo['phaseNumber'] == 1
+    before = axial._modality_pixel.copy()
+    axial.applyWindowPreset(45, 350)
+    click(window, find(window, 'primaryTool-play'))
+    click(window, find(window, 'phaseButton-1'))
+    wait_until(lambda: axial.overlayInfo.get('phaseNumber') == 2
+               and ws.activeLoadState.status == 'ready' and not axial.render_pending, timeout=30000)
+    assert np.any(before != axial._modality_pixel)
+    assert all(v.current_window == WindowLevel(45, 350) for v in tab.viewports_by_id.values())
+    assert not warnings, warnings

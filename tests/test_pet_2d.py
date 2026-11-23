@@ -315,6 +315,8 @@ def test_scanner_to_render_worker_pet_integration(
 ) -> None:
     dataset = _pet_dataset()
     dataset.SeriesType = list(series_type)
+    dataset.SeriesDate = "20240101"
+    dataset.SeriesTime = "130000"
     path = _write_dataset(dataset, tmp_path / "pet.dcm")
     instance = _read_instance(path)
     assert instance is not None
@@ -410,9 +412,63 @@ def test_bqml_start_derives_suvbw_with_decay_corrected_dose() -> None:
     assert result.window == WindowLevel(center=5, width=10)
 
 
+@pytest.mark.parametrize("time_source", ["ge", "siemens", "explicit_reference"])
+def test_whole_body_start_uses_shared_reference_for_late_bed(tmp_path, time_source):
+    dataset = _pet_dataset()
+    dataset.SeriesType = ["WHOLE BODY", "IMAGE"]
+    dataset.SeriesDate = "20240102"
+    dataset.SeriesTime = "020000"
+    dataset.AcquisitionDateTime = "20240102002000+0800"
+    dataset.TimezoneOffsetFromUTC = "+0800"
+    item = dataset.RadiopharmaceuticalInformationSequence[0]
+    item.RadiopharmaceuticalStartDateTime = "20240101151000+0000"
+    if time_source == "ge":
+        block = dataset.private_block(0x0009, "GEMS_PETD_01", create=True)
+        block.add_new(0x0D, "DT", "20240102001000")
+    elif time_source == "siemens":
+        # Implicit VR readers may return an unregistered private DT as raw bytes.
+        block = dataset.private_block(0x0071, "SIEMENS MED PT", create=True)
+        block.add_new(0x22, "UN", b"20240102001000")
+    elif time_source == "explicit_reference":
+        dataset.DecayCorrectionDateTime = "20240102001000"
+    path = _write_dataset(dataset, tmp_path / "bed.dcm")
+    loader = DicomLoader()
+    header, pixels = loader.read_frame(path)
+    result = loader.load_dataset(header, None, False, modality_pixels=pixels)
+    assert result.pixel_value_meta.unit == "SUVbw"
+    assert result.modality_pixel[0, 1] == pytest.approx(2.0)
+    metrics = roi_metrics(
+        [ImagePoint(0, 0), ImagePoint(1, 1)], MeasurementKind.RECT,
+        result.modality_pixel, row_spacing=1, column_spacing=1, unit="SUVbw",
+    )
+    assert metrics.mean == pytest.approx(3.0)
+
+
+@pytest.mark.parametrize("problem", ["missing", "postprocessed", "wrong_creator", "mixed_offsets", "conflict", "unverified_early_series"])
+def test_whole_body_uncertain_reference_preserves_activity(problem):
+    dataset = _pet_dataset()
+    dataset.SeriesType = ["WHOLE BODY", "IMAGE"]
+    if problem != "missing":
+        dataset.SeriesDate = "20240101"
+        dataset.SeriesTime = "125000" if problem in {"mixed_offsets", "conflict", "unverified_early_series"} else "140000"
+    if problem in {"wrong_creator", "conflict"}:
+        creator = "GEMS_PETD_01" if problem == "conflict" else "OTHER_VENDOR"
+        dataset.private_block(0x0009, creator, create=True).add_new(0x0D, "DT", "20240101124500")
+    if problem == "mixed_offsets":
+        dataset.AcquisitionDateTime = "20240101130000+0100"
+    result = DicomLoader().load_dataset(dataset, None, False, preferred_unit="suvbw")
+    assert result.pixel_value_meta.unit == "Bq/ml"
+    assert result.pixel_value_meta.warning
+    assert result.modality_pixel[0, 1] == 1000
+
+
 def test_bqml_admin_uses_original_administered_dose() -> None:
     dataset = _pet_dataset()
     dataset.DecayCorrection = "ADMIN"
+    dataset.SeriesType = ["WHOLE BODY", "IMAGE"]
+    del dataset.AcquisitionDateTime
+    del dataset.RadiopharmaceuticalInformationSequence[0].RadionuclideHalfLife
+    del dataset.RadiopharmaceuticalInformationSequence[0].RadiopharmaceuticalStartDateTime
 
     result = DicomLoader().load_dataset(dataset, None, False)
 

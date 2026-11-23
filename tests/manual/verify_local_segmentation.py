@@ -136,4 +136,9 @@ def poll():
 
 clock=QTimer();clock.timeout.connect(poll);clock.start(300)
 qt.aboutToQuit.connect(app.shutdown)
-qt.exec()
+try:
+    qt.exec()
+finally:
+    # Release the QML bindings while their Python context properties are alive.
+    from shiboken6 import delete
+    delete(engine)

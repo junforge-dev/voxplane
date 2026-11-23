@@ -14,6 +14,7 @@ WindowLevelToolPanel {
     contextReady: controller?.ready === true
     currentCenter: controller?.ctCenter ?? NaN
     currentWidth: controller?.ctWidth ?? NaN
+    minimumWidth: controller?.ctMinimumWindowWidth ?? 1
     supportsInversion: true
     inverted: controller?.ctInverted ?? false
     onInversionRequested: controller?.toggleCtInverted()

@@ -83,6 +83,7 @@
         <file>src/voxplane/qml/sections/LeftPanel.qml</file>
         <file>src/voxplane/qml/sections/FusionSeriesDialog.qml</file>
         <file>src/voxplane/qml/sections/ExportDialog.qml</file>
+        <file>src/voxplane/qml/sections/ExportFramePreview.qml</file>
         <file>src/voxplane/qml/sections/ImportTaskDialog.qml</file>
         <file>src/voxplane/qml/sections/SidebarContainer.qml</file>
         <file>src/voxplane/qml/sections/CompactSeriesRail.qml</file>

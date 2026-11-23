@@ -6,8 +6,27 @@ from pydicom.dataset import Dataset
 from pydicom.pixels import apply_color_lut, apply_modality_lut, apply_voi_lut
 from PySide6.QtGui import QImage
 
-from voxplane.core.dicom_loader import DicomLoader, _optional_float
+from voxplane.core.dicom_loader import DicomLoader, source_voi
 from voxplane.model import WindowLevel
+
+
+def full_range_review_image(pixels, *, inverted):
+    """Expose the finite stored values in one grayscale frame for DICOM review."""
+    finite = np.isfinite(pixels)
+    gray = np.zeros(pixels.shape, dtype=np.uint8)
+    values = pixels[finite]
+    if values.size:
+        low, high = float(values.min()), float(values.max())
+        if high > low:
+            # Split an extreme cross-zero range before subtracting its endpoints.
+            values = values.astype(np.float64, copy=False)
+            if high - low == float("inf"):
+                values, low, high = values * .5, low * .5, high * .5
+            gray[finite] = np.rint((values - low) / (high - low) * 255)
+        if inverted:
+            gray[finite] = 255 - gray[finite]
+    height, width = gray.shape
+    return QImage(gray.data, width, height, gray.strides[0], QImage.Format_Grayscale8).copy()
 
 
 def frame_image(pixels, dataset, frame_index=0):
@@ -42,8 +61,7 @@ def frame_image(pixels, dataset, frame_index=0):
         image_format = QImage.Format_RGB888 if pixels.ndim == 3 else QImage.Format_Grayscale8
     elif pixels.ndim == 2:
         pixels = np.asarray(apply_modality_lut(pixels, metadata), dtype=np.float64)
-        center = _optional_float(getattr(metadata, "WindowCenter", None))
-        width = _optional_float(getattr(metadata, "WindowWidth", None))
+        window, function = source_voi(metadata)
         if getattr(metadata, "VOILUTSequence", None):
             pixels = apply_voi_lut(pixels, metadata)
             bits = int(metadata.VOILUTSequence[0].LUTDescriptor[2])
@@ -51,11 +69,14 @@ def frame_image(pixels, dataset, frame_index=0):
             if photometric == "MONOCHROME1":
                 pixels = 255 - pixels
         else:
-            if center is None or width is None or width < 1:
+            if window is None:
                 finite = pixels[np.isfinite(pixels)]
                 low, high = (float(finite.min()), float(finite.max())) if finite.size else (0, 1)
-                center, width = (low + high) / 2, max(1, high - low)
-            pixels = DicomLoader.apply_window(pixels, WindowLevel(center, width), photometric == "MONOCHROME1")
+                window = WindowLevel((low + high) / 2, max(1, high - low))
+            pixels = DicomLoader.apply_window(
+                pixels, window, photometric == "MONOCHROME1",
+                minimum_width=min(1.0, window.width), voi_lut_function=function,
+            )
         image_format = QImage.Format_Grayscale8
     elif pixels.ndim == 3 and pixels.shape[2] in (3, 4):
         if pixels.dtype != np.uint8:

@@ -13,6 +13,7 @@ from voxplane.core.display_mapping import map_display
 from voxplane.model.display_mapping import SourcePalette
 from voxplane.core.render_cancellation import render_cancellation, check_render_cancelled
 from voxplane.core.volume_manager import VolumeManager
+from voxplane.core.dicom_scanner import stack_phase_key
 from voxplane.core.dicom_loader import DicomLoader
 from voxplane.core.mr import validate_mr_series, automatic_mr_window
 from voxplane.core.mpr_reslicer import MprReslicer
@@ -214,12 +215,12 @@ class DicomRenderWorker(QObject):
                 default_window=loaded.window,
                 automatic_window=automatic_mr_window(modality_pixels) if series.modality.upper() == "MR" else None,
                 pixel_value_meta=loaded.pixel_value_meta,
-                instance_meta=loader.extract_instance_meta(dataset),
+                instance_meta=loaded.instance_meta,
             )
             self._montage_cache.put(cache_key, cached)
 
         is_mr = series.modality.upper() == "MR"
-        minimum = 0.001 if is_mr else 1.0
+        minimum = cached.instance_meta.minimum_window_width(0.001 if is_mr else 1.0)
         effective_window = loader.normalize_window(
             request.window or cached.default_window, minimum_width=minimum
         )
@@ -228,6 +229,7 @@ class DicomRenderWorker(QObject):
             target_window=effective_window,
             inverted=request.inverted ^ (is_mr and cached.instance_meta.photometric_interpretation == "MONOCHROME1"),
             minimum_width=minimum,
+            voi_lut_function=cached.instance_meta.voi_lut_function,
         )
         image = map_display(image, cached.modality_pixels, cached.pixel_value_meta,
             cached.supplemental_overlay, cached.source_palette, request.display_mapping, request.color_map)
@@ -298,6 +300,7 @@ class DicomRenderWorker(QObject):
                 instance_path=instance.path,
                 render_request=request,
                 frame_index=instance.frame_index,
+                pet_series_start=series.pet_series_start,
             )
             if dicom_load_result is None:
                 raise ValueError(
@@ -316,6 +319,8 @@ class DicomRenderWorker(QObject):
                     slice_index=actual_slice_index,
                     slice_count=slice_count,
                     window=dicom_load_result.window,
+                    stack_phase=stack_phase_key(instance, series),
+                    frame_of_reference_uid=instance.frame_of_reference_uid,
                     instance_meta=dicom_load_result.instance_meta,
                     inverted=dicom_load_result.inverted,
                     geometry=ImageGeometryMeta(
@@ -402,6 +407,7 @@ class DicomRenderWorker(QObject):
 
         loader = DicomLoader()
         minimum = 0.01 if volume.pixel_value_meta.is_suv else 0.001 if getattr(series, "modality", "").upper() in ("PT", "MR") else 1.
+        minimum = volume.representative_instance_meta.minimum_window_width(minimum)
         effective_window = loader.normalize_window(
             request.window or volume.default_window, minimum_width=minimum
         )
@@ -410,6 +416,7 @@ class DicomRenderWorker(QObject):
             target_window=effective_window,
             inverted=request.inverted ^ (series.modality.upper() == "MR" and volume.representative_instance_meta.photometric_interpretation == "MONOCHROME1"),
             minimum_width=minimum,
+            voi_lut_function=volume.representative_instance_meta.voi_lut_function,
         )
 
         rows = plane_geometry.rows

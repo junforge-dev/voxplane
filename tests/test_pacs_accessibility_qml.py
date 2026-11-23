@@ -211,3 +211,28 @@ def test_paging_arrows_explain_which_list_they_change(scene, pacs_server):
             assert button.property('hintText') == label
             assert QAccessible.queryAccessibleInterface(button).text(QAccessible.Name) == label
     assert not warnings, warnings
+
+
+def test_query_filter_accessible_names_match_visible_captions(scene, pacs_server):
+    window, app, warnings = scene
+    app.languageController.selectLanguage("en-US")
+    window.resize(1400, 1000)
+    assert app.pacsController.saveProfile({"name": "Local", "url": pacs_server.url})
+    app.workspaceController.openPacs()
+    click(window, find(window, "pacsMoreFilters"))
+    expected = {
+        "pacsProfileChoice": "Connection",
+        "pacsPatientName": "Patient name",
+        "pacsPatientId": "Patient ID",
+        "pacsAccession": "Accession number",
+        "pacsDateFrom": "Start date (optional)",
+        "pacsDateTo": "End date (optional)",
+        "pacsModality": "Modality",
+        "pacsPageSize": "Results per page",
+        "pacsStudyUid": "Study UID",
+        "pacsStudyDescription": "Study description",
+    }
+    for name, caption in expected.items():
+        accessible = QAccessible.queryAccessibleInterface(find(window, name))
+        assert accessible.text(QAccessible.Name) == caption, name
+    assert not warnings, warnings

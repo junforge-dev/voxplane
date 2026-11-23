@@ -3,26 +3,23 @@
 from pathlib import Path
 
 import numpy as np
-from pydicom.dataset import Dataset
-from pydicom.pixels import apply_modality_lut, apply_color_lut
+import pydicom
+from pydicom.pixels import apply_modality_lut
 from voxplane.core.pixel_codecs import decode_pixels
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage
 
-from voxplane.core.dicom_loader import DicomLoader, _optional_float
+from voxplane.core.dicom_loader import DicomLoader, source_voi
 from voxplane.model import WindowLevel
 
 
 def read_series_thumbnail(path: Path, frame_index=None) -> QImage:
+    metadata = pydicom.dcmread(path, stop_before_pixels=True)
+    pixels = decode_pixels(path, index=frame_index or 0, header=metadata)
     if frame_index is not None:
         from voxplane.core.export_images import frame_image
-        import pydicom
-        metadata = pydicom.dcmread(path, stop_before_pixels=True)
-        image = frame_image(decode_pixels(path, index=frame_index), metadata, frame_index)
+        image = frame_image(pixels, metadata, frame_index)
         return image.scaled(128, 128, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-    metadata = Dataset()
-    pixels = decode_pixels(path, index=0, ds_out=metadata,
-                         specific_tags=[0x00080060, 0x00080016, 0x00080008])
     photometric = str(getattr(metadata, "PhotometricInterpretation", ""))
     from voxplane.core.color_image import is_color, color_pixels
     if is_color(metadata):
@@ -33,13 +30,15 @@ def read_series_thumbnail(path: Path, frame_index=None) -> QImage:
         image_format = QImage.Format_Grayscale8
     elif pixels.ndim == 2:
         pixels = np.asarray(apply_modality_lut(pixels, metadata), dtype=np.float32)
-        center = _optional_float(getattr(metadata, "WindowCenter", None))
-        width = _optional_float(getattr(metadata, "WindowWidth", None))
-        if center is None or width is None or width <= 0:
+        window, function = source_voi(metadata)
+        if window is None:
             finite = pixels[np.isfinite(pixels)]
             low, high = np.percentile(finite, [1, 99]) if finite.size else (0.0, 1.0)
-            center, width = float((low + high) / 2), max(1.0, float(high - low))
-        pixels = DicomLoader.apply_window(pixels, WindowLevel(center, width), photometric == "MONOCHROME1")
+            window = WindowLevel(float((low + high) / 2), max(1.0, float(high - low)))
+        pixels = DicomLoader.apply_window(
+            pixels, window, photometric == "MONOCHROME1",
+            minimum_width=min(1.0, window.width), voi_lut_function=function,
+        )
         image_format = QImage.Format_Grayscale8
     elif pixels.ndim == 3 and pixels.shape[2] in (3, 4):
         if pixels.dtype != np.uint8:

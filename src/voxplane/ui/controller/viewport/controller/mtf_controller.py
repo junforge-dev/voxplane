@@ -14,7 +14,7 @@ import numpy as np
 
 from PySide6.QtCore import QObject, Property, QRunnable, QThreadPool, Qt, Signal, Slot
 
-from voxplane.core.mtf_quality import metric_quality, quality_warnings
+from voxplane.core.mtf_quality import actual_method_text, metric_quality, quality_warnings
 from voxplane.i18n.messages import localize
 from voxplane.core.measurement_format import format_measurement
 from voxplane.core.bead_mtf import (
@@ -95,6 +95,7 @@ class MtfController(QObject):
     recordsChanged = Signal()
     _i18n_provenance = Signal()
     _i18n_calculationDetails = Signal()
+    _i18n_actualMethodText = Signal()
     _i18n_resultOrigin = Signal()
     _i18n_warnings = Signal()
 
@@ -306,6 +307,10 @@ class MtfController(QObject):
         result = self._presented_result()
         return result.analysis_method if result is not None else ""
 
+    @_TextProperty(str, notify=_i18n_actualMethodText, notify_name='_i18n_actualMethodText', source_notify='stateChanged')
+    def actualMethodText(self):
+        return actual_method_text(self.actualAnalysisMethod)
+
     def _presented_result(self):
         if self.status != "ready":
             return None
@@ -314,6 +319,8 @@ class MtfController(QObject):
     def _presented_analysis_result(self, analysis):
         if analysis is None or analysis.error:
             return None
+        if isinstance(analysis.result, RampFwhmResult):
+            return analysis.result
         if analysis.presented is not None:
             return analysis.presented
         result = analysis.result
@@ -620,12 +627,16 @@ class MtfController(QObject):
     @_TextProperty(str, notify=_i18n_calculationDetails, notify_name='_i18n_calculationDetails', source_notify='stateChanged')
     def calculationDetails(self):
         result = self._presented_result()
+        if isinstance(result, RampFwhmResult):
+            parts = [self.actualMethodText, localize(_msg('ramp.profileInfo'))]
+            explanation = {'half_height': 'ramp.crossingsInfo', 'gaussian': 'ramp.gaussianInfo'}.get(result.analysis_method)
+            if explanation:
+                parts.append(localize(_msg(explanation)))
+            return '\n'.join(parts)
         if not isinstance(result, BeadMtfResult):
             return ''
         measured = self._current_analysis().result
-        method_key = {'tukey_fft': 'mtf.usedWeighted', 'gaussian': 'mtf.usedGaussian',
-                      'gaussian_equivalent': 'mtf.usedEquivalent'}.get(result.analysis_method, 'mtf.usedDirect')
-        parts = [localize(_msg(method_key))]
+        parts = [self.actualMethodText]
         if result.analysis_method == 'gaussian_equivalent':
             parts.append(localize(_msg('mtf.equivalentFormula')))
         # Summarize the saved calculation geometry, never global settings or

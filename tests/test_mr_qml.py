@@ -119,6 +119,7 @@ def test_shared_panels_tolerate_controller_properties_during_teardown(qt_app):
     from voxplane.ui.svg_icon_provider import SvgIconProvider
     qml = Path(__file__).resolve().parents[1] / 'src/voxplane/qml'
     for file, properties in [
+        ('sections/right/panels/PetRegistrationPanel.qml', {'controller': None}),
         ('sections/right/ToolResetBar.qml', {'toolController': None, 'voiController': {}}),
         ('sections/center/viewportArea/MprReferenceViewport.qml', {'controller': {}}),
     ]:

@@ -5,7 +5,7 @@ import numpy as np
 import pydicom
 import pytest
 from pydicom.dataset import FileDataset, FileMetaDataset, Dataset
-from pydicom.uid import ExplicitVRLittleEndian, ImplicitVRLittleEndian, MRImageStorage, EnhancedMRImageStorage, RLELossless, generate_uid
+from pydicom.uid import CTImageStorage, ExplicitVRLittleEndian, ImplicitVRLittleEndian, MRImageStorage, EnhancedMRImageStorage, RLELossless, generate_uid
 
 from voxplane.core.dicom_loader import DicomLoader
 from voxplane.core.dicom_scanner import DicomFolderScanner
@@ -114,6 +114,8 @@ def test_auto_window_constant_padding_and_ct_fallback():
         value=automatic_mr_window(pixels)
         assert np.isfinite([value.center,value.width]).all() and value.width>0
     ds=mr_dataset(); ds.Modality='CT'
+    ds.SOPClassUID = ds.file_meta.MediaStorageSOPClassUID = CTImageStorage
+    ds.ImageType = ["ORIGINAL", "PRIMARY", "AXIAL"]
     result=DicomLoader().load_dataset(ds,None,False)
     assert result.window == WindowLevel(40,400) and result.pixel_value_meta.unit == 'HU'
 
@@ -147,11 +149,14 @@ def test_oblique_mr_builds_volume_and_all_mpr_planes(tmp_path):
 @pytest.mark.parametrize('valid_frame', [0, 2, None])
 def test_mr_mpr_preserves_valid_source_window(tmp_path, valid_frame):
     def source_window(ds, i):
-        ds.WindowCenter, ds.WindowWidth = 123, 456 if i == valid_frame else 0
+        ds.WindowCenter, ds.WindowWidth = 123, .0005 if i == valid_frame else 0
+        if i == valid_frame:
+            ds.VOILUTFunction = "SIGMOID"
     series = write_mr_series(tmp_path, change=source_window)
     volume = VolumeManager().get_or_build(series)
-    expected = WindowLevel(123, 456) if valid_frame is not None else automatic_mr_window(volume.modality_pixels)
+    expected = WindowLevel(123, .0005) if valid_frame is not None else automatic_mr_window(volume.modality_pixels)
     assert volume.default_window == expected
+    assert volume.representative_instance_meta.voi_lut_function == ("SIGMOID" if valid_frame is not None else "LINEAR_EXACT")
 
 
 @pytest.mark.parametrize('kind', ['echo','bvalue','time','component','position','orientation','spacing','localizer','frames','enhanced','color','mosaic'])

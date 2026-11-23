@@ -18,7 +18,8 @@ class CursorController(QObject):
         self._pixel_value_meta = PixelValueMeta(
             unit=(
                 "HU"
-                if viewport_config.series_meta.modality.strip().upper() == "CT"
+                if (viewport_config.series_meta.modality.strip().upper() == "CT"
+                    and viewport_config.series_meta.supports_ct_analysis)
                 else ""
             )
         )
@@ -27,6 +28,7 @@ class CursorController(QObject):
         if (
             not meta.unit
             and self.viewport_config.series_meta.modality.upper() == "CT"
+            and self.viewport_config.series_meta.supports_ct_analysis
         ):
             meta = PixelValueMeta(unit="HU", source_unit="HU")
         if meta == self._pixel_value_meta:

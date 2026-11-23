@@ -98,6 +98,7 @@ Item {
     }
     RoiMeasurementItem {
         id: roiItem
+        hoverSource: root.coordinateMapper?.hoverSource ?? null
         settingsController: root.settingsController
         showMetrics: root.showRoiMetrics
         shortLabel: root.roiLabel

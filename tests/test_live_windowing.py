@@ -57,7 +57,8 @@ def assert_live(view, provider, before_source):
     assert view.imageSource != before_source, 'Image must change before release or worker completion'
     assert_live_labels(view)
     expected = apply_color_map(DicomLoader.apply_window(
-        view._modality_pixel, view.current_window, view.inverted), view.activeColorMap)
+        view._modality_pixel, view.current_window, view.inverted,
+        voi_lut_function=view._frame_meta.instance_meta.voi_lut_function), view.activeColorMap)
     assert_image(provider, view.viewportId, expected)
 
 
@@ -130,7 +131,8 @@ def test_ct_drag_publishes_every_view_before_worker_finishes(comparison, mode):
     assert [(v.current_window, v.inverted) for v in linked] == intended
     for view in linked:
         assert_image(provider, view.viewportId, apply_color_map(DicomLoader.apply_window(
-            view._modality_pixel, view.current_window, view.inverted), view.activeColorMap))
+            view._modality_pixel, view.current_window, view.inverted,
+            voi_lut_function="LINEAR"), view.activeColorMap))
     # No endInteraction was called during any assertion above.
     source.endInteraction(164, 92, True, 0, 0)
 
@@ -152,7 +154,7 @@ def test_montage_all_retained_slices_window_live_and_release_samples(comparison)
         for index in range(3):
             assert view._slice_model.item(index)['imageSource'] != before[index]
             assert_image(provider, view.image_key(index), DicomLoader.apply_window(
-                view._display_samples[index], view.viewport_state.window, view.inverted))
+                view._display_samples[index], view.viewport_state.window, view.inverted, voi_lut_function="LINEAR"))
     drain(app, pending)
     view.dispose()
     assert not view._display_samples

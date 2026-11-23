@@ -75,7 +75,7 @@ def frame_metadata(dataset, frame_index):
         # groups, not stale classic attributes at the top level of an Enhanced object.
         excluded |= {0x00200032, 0x00200037, 0x00280030, 0x00180050,
                      0x00281052, 0x00281053, 0x00281054, 0x00281050, 0x00281051,
-                     0x00283000}
+                     0x00281056, 0x00283000}
     for element in dataset:
         if element.tag not in excluded:
             result.add(copy(element))

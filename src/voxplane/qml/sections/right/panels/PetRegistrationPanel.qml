@@ -8,9 +8,11 @@ ColumnLayout {
     id: panel
     objectName: "petRegistrationPanel"
     required property var controller
+    readonly property bool ready: controller?.ready === true
+    readonly property bool registrationActive: controller?.registrationActive === true
     spacing: 12
     readonly property string parameterContext: JSON.stringify([controller?.registrationParameters ?? [],
-        controller?.registrationActive ?? false, controller?.ready ?? false])
+        registrationActive, ready])
     onParameterContextChanged: discardDraft()
     function discardDraft() {
         for (let i = 0; i < parameters.count; ++i) parameters.itemAt(i)?.input.sync()
@@ -24,7 +26,7 @@ ColumnLayout {
         return true
     }
     function applyDraft() {
-        if (!panel.controller?.ready || !panel.controller.registrationActive || !panel.draftValid) return
+        if (!panel.ready || !panel.registrationActive || !panel.draftValid) return
         const values = Array(6)
         for (let i = 0; i < parameters.count; ++i) {
             const row = parameters.itemAt(i), input = row.input
@@ -50,23 +52,23 @@ ColumnLayout {
     }
         Text {
             Layout.fillWidth: true
-            visible: panel.controller.registrationStatus !== ""
-            text: panel.controller.registrationStatus
+            visible: text.length > 0
+            text: panel.controller?.registrationStatus ?? ""
             color: Theme.textPrimary
             wrapMode: Text.Wrap
         }
         Components.AppButton {
             objectName: "togglePetRegistration"
             Layout.fillWidth: true
-            enabled: panel.controller.ready
-            text: panel.controller.registrationActive ? qsTrId("text.1056") : qsTrId("text.1057")
-            onClicked: panel.controller.setRegistrationActive(!panel.controller.registrationActive)
+            enabled: panel.ready
+            text: panel.registrationActive ? qsTrId("text.1056") : qsTrId("text.1057")
+            onClicked: panel.controller?.setRegistrationActive(!panel.registrationActive)
         }
 
         GridLayout {
             Layout.fillWidth: true
             columns: 2
-            enabled: panel.controller.ready && panel.controller.registrationActive
+            enabled: panel.ready && panel.registrationActive
             Repeater {
                 id: parameters
                 model: [
@@ -85,12 +87,12 @@ ColumnLayout {
                     Text { text: parameterRow.modelData.label; color: Theme.textMuted; font.pixelSize: 11 }
                     Components.AppNumberField {
                         id: parameterInput
-                        editContext: [panel.controller, panel.controller?.registrationActive ?? false]
+                        editContext: [panel.controller, panel.registrationActive]
                         commitOnFinish: false
                         objectName: "registrationParameter-" + parameterRow.modelData.parameter
                         Layout.fillWidth: true
                         color: Theme.textPrimary
-                        numberValue: panel.controller.registrationParameters[parameterRow.modelData.parameter]
+                        numberValue: panel.controller?.registrationParameters?.[parameterRow.modelData.parameter] ?? 0
                         minimum: -10000
                         maximum: 10000
                         decimals: 2
@@ -120,19 +122,19 @@ ColumnLayout {
             objectName: "applyRegistrationParameters"
             Layout.fillWidth: true
             text: qsTrId("text.1090")
-            enabled: panel.controller?.ready === true && panel.controller.registrationActive && panel.draftValid
+            enabled: panel.ready && panel.registrationActive && panel.draftValid
             onClicked: panel.applyDraft()
         }
         Components.AppButton {
             Layout.fillWidth: true
             text: qsTrId("text.1065")
-            enabled: panel.controller.ready
-            onClicked: panel.controller.centerAlign()
+            enabled: panel.ready
+            onClicked: panel.controller?.centerAlign()
         }
         RowLayout {
             Layout.fillWidth: true
-            Components.AppButton { Layout.fillWidth: true; text: qsTrId("text.1066"); enabled: panel.controller.ready; onClicked: panel.controller.loadRegistration() }
-            Components.AppButton { Layout.fillWidth: true; text: qsTrId("text.1067"); enabled: panel.controller.ready; onClicked: panel.controller.saveRegistration() }
+            Components.AppButton { Layout.fillWidth: true; text: qsTrId("text.1066"); enabled: panel.ready; onClicked: panel.controller?.loadRegistration() }
+            Components.AppButton { Layout.fillWidth: true; text: qsTrId("text.1067"); enabled: panel.ready; onClicked: panel.controller?.saveRegistration() }
         }
 
 

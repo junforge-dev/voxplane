@@ -11,6 +11,7 @@ Item {
     readonly property var styleSettings: preferences.measurement ?? ({})
     property bool draftStyle: isDraft
     readonly property bool dashed: Theme.drawingLineDashed(styleSettings, draftStyle)
+    property alias hoverSource: metricCard.hoverSource
     property var labelPosition: null
     property var reservedRegions: []
     required property var measurement

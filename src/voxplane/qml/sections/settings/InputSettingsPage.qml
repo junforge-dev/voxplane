@@ -9,6 +9,11 @@ ColumnLayout {
     required property var settingsController
     signal resetShortcutsRequested()
     property string resetHint: ""
+    property string shortcutFilter: ""
+    function matchingBindings(bindings) {
+        return shortcutFilter ? bindings.filter(binding =>
+            qsTrId(binding.labelId).toLocaleLowerCase().includes(shortcutFilter)) : bindings
+    }
     readonly property var focusedResetButton: {
         if (!shortcutReset.visible) return null
         for (let item = Window.window?.activeFocusItem; item; item = item.parent)
@@ -63,6 +68,7 @@ ColumnLayout {
     }
     SettingsSection {
         id: shortcutsSection
+        visible: shortcutRows.count > 0
         sectionKey: "input-shortcuts"
         settingsController: page.settingsController
         Layout.fillWidth: true
@@ -70,7 +76,7 @@ ColumnLayout {
         description: qsTrId("input.shortcutHint")
         Repeater {
             id: shortcutRows
-            model: page.shortcuts.bindings
+            model: page.matchingBindings(page.shortcuts.bindings)
             delegate: ColumnLayout {
                 id: row
                 required property var modelData
@@ -93,6 +99,7 @@ ColumnLayout {
                         compact: true
                         checked: page.shortcuts.recordingAction === row.modelData.action
                         text: checked ? qsTrId("input.recording") : row.modelData.display || qsTrId("input.record")
+                        Accessible.name: qsTrId(row.modelData.labelId) + " · " + text
                         onClicked: page.shortcuts.beginRecording(row.modelData.action)
                     }
                     Components.AppButton {
@@ -101,7 +108,7 @@ ColumnLayout {
                         minimumButtonWidth: 32
                         compact: true
                         iconName: "close"; iconSize: 16
-                        Accessible.name: qsTrId("input.clear")
+                        Accessible.name: qsTrId("input.clear") + " · " + qsTrId(row.modelData.labelId)
                         onClicked: { page.shortcuts.cancelRecording(); page.shortcuts.assign(row.modelData.action, "") }
                         Components.AppToolTip { requested: parent.hovered; text: qsTrId("input.clear") }
                     }
@@ -110,6 +117,7 @@ ColumnLayout {
         }
         Components.AppButton {
             id: shortcutReset
+            visible: !page.shortcutFilter
             objectName: "resetShortcuts"
             shortcutTitle: qsTrId("text.0843")
             captionKey: page.focusedResetButton === shortcutReset ? page.resetHint : ""
@@ -121,12 +129,14 @@ ColumnLayout {
     }
     SettingsSection {
         sectionKey: "input-fixed"
+        visible: fixedRows.count > 0
         settingsController: page.settingsController
         Layout.fillWidth: true
         title: qsTrId("input.fixed")
         description: qsTrId("input.fixedScope")
         Repeater {
-            model: page.shortcuts.fixedBindings
+            id: fixedRows
+            model: page.matchingBindings(page.shortcuts.fixedBindings)
             delegate: RowLayout {
                 id: fixedRow
                 required property var modelData
@@ -140,7 +150,7 @@ ColumnLayout {
                     border.color: Theme.selectionBorder
                     radius: 5
                     Accessible.role: Accessible.StaticText
-                    Accessible.name: keyText.text
+                    Accessible.name: qsTrId(fixedRow.modelData.labelId) + " · " + keyText.text
                     Text {
                         id: keyText
                         anchors.centerIn: parent

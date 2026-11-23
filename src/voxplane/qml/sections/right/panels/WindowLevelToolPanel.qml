@@ -54,7 +54,12 @@ ColumnLayout {
         syncInputs()
     }
 
-    function roundedValue(value) { const scale = Math.pow(10, inputPrecision); return Math.round(value * scale) / scale }
+    function roundedValue(value) {
+        // Source VOI can permit narrower windows than the usual CT/MR editor.
+        if (minimumWidth < (supportsAutoWindow ? 0.001 : 1)) return value
+        const scale = Math.pow(10, inputPrecision)
+        return Math.round(value * scale) / scale
+    }
 
     function discardDraft() {
         dirty = false
@@ -77,7 +82,7 @@ ColumnLayout {
         const center = centerInput.text.trim() ? Number(centerInput.text) : NaN
         if (!Number.isFinite(width) || width < minimumWidth || width > 1000000
                 || !Number.isFinite(center) || center < -1000000 || center > 1000000) {
-            errorText = qsTrId(supportsAutoWindow ? "mr.invalidWindow" : "text.0061")
+            errorText = qsTrId("window.invalidRange").arg(String(minimumWidth))
             return null
         }
         errorText = ""
@@ -91,8 +96,16 @@ ColumnLayout {
         dirty = false
         syncInputs()
     }
-    function saveTemplate() {
+    function templateValues() {
         const value = values()
+        if (value && value.width < 1) {
+            errorText = qsTrId("window.templateMinimumWidth")
+            return null
+        }
+        return value
+    }
+    function saveTemplate() {
+        const value = templateValues()
         if (!value || !settingsController) return
         if (settingsController.saveWindowTemplate("", templateName.text, value.width, value.center)) {
             widthInput.text = String(value.width)
@@ -108,6 +121,7 @@ ColumnLayout {
         errorText = ""
         windowPanel.forceActiveFocus()
     }
+    onMinimumWidthChanged: syncInputs()
     onCurrentCenterChanged: discardDraft()
     onCurrentWidthChanged: discardDraft()
     Component.onCompleted: syncInputs()
@@ -234,7 +248,7 @@ ColumnLayout {
                     Layout.fillWidth: true
                     enabled: windowPanel.ready && !!windowPanel.settingsController
                     onClicked: {
-                        if (!windowPanel.values()) return
+                        if (!windowPanel.templateValues()) return
                         windowPanel.namingTemplate = true
                         templateName.forceActiveFocus()
                     }

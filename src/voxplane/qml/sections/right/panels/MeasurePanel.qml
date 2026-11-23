@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Window
 import "../../../components/ScrollFocus.js" as ScrollFocus
+import "../../../components/ShortcutCaption.js" as KeysText
 import QtQuick.Layouts
 import QtQuick.Controls.Basic as Basic
 import "../components" as Components
@@ -16,6 +17,7 @@ Item {
     property var dicomResults: null
     property var viewportController: null
     property bool maskConversionAvailable: false
+    property bool playing: false
     readonly property var currentAction: toolController?.measureActions.find(
         entry => entry.action === toolController.activeInteraction)
     readonly property real toolsTop: heading.implicitHeight + 8
@@ -44,6 +46,21 @@ Item {
             color: Theme.textPrimary
             font.pixelSize: 14
             font.weight: Font.DemiBold
+        }
+        Widgets.AppButton {
+            objectName: "measurementPasteRoiInPlace"
+            Layout.maximumWidth: Math.max(50, measurePanel.width * 0.46)
+            compact: true
+            visible: measurePanel.viewportController?.viewportType === "stack"
+            readonly property string issue: visible ? measurePanel.viewportController?.roiPasteUnavailableReason ?? "roiPaste.notReady" : ""
+            enabled: visible && !issue && !measurePanel.playing
+            shortcutTitle: qsTrId("roiPaste.shortAction")
+            captionKey: KeysText.hint("paste-roi-in-place", typeof appController !== "undefined"
+                ? appController.shortcutController?.bindings ?? [] : [], Window.window?.readingMenuSequences)
+            Accessible.name: qsTrId("roiPaste.action")
+            hintText: issue ? qsTrId(issue) : Accessible.name + (captionKey ? " (" + captionKey + ")" : "")
+            Accessible.description: hintText
+            onClicked: measurePanel.viewportController?.pasteRoiInPlace()
         }
         Components.ToolActionButton {
             objectName: "measurementManualButton"

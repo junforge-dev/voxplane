@@ -36,11 +36,19 @@ Rectangle {
     Component.onCompleted: toolbarEditor.selectProfile(page.workspaceController?.toolbarProfileForEditing?.() ?? "")
     readonly property string searchQuery: search.text.trim().toLocaleLowerCase()
     readonly property var searchAliases: ({appearance: qsTrId("settings.searchAliases.appearance"), input: qsTrId("settings.searchAliases.input"), window: qsTrId("settings.searchAliases.window")})
+    readonly property string shortcutSearchText: {
+        const shortcuts = typeof appController !== "undefined" ? appController.shortcutController : null
+        if (!shortcuts) return ""
+        return shortcuts.bindings.concat(shortcuts.fixedBindings)
+            .map(binding => qsTrId(binding.labelId)).join("\n").toLocaleLowerCase()
+    }
     function matchesCategory(category) {
+        if (category.key === "input" && shortcutSearchText.includes(searchQuery)) return true
         const terms = (SearchIndex.labels[category.key] ?? []).map(key => qsTrId(key)).join(" ")
         return !searchQuery || (category.title + " " + category.subtitle + " " + terms + " " + (searchAliases[category.key] ?? "")).toLocaleLowerCase().includes(searchQuery)
     }
-    readonly property int searchMatchCount: categories.filter(category => matchesCategory(category)).length
+    readonly property var matchingCategories: categories.filter(category => matchesCategory(category))
+    readonly property int searchMatchCount: matchingCategories.length
     color: Theme.panelBackgroundStrong
     readonly property string selectedCategory: settingsController.activeCategory
     readonly property var categories: [
@@ -182,6 +190,10 @@ Rectangle {
                     objectName: "settingsSearch"
                     Layout.fillWidth: true
                     placeholderText: qsTrId("text.0835")
+                    onAccepted: {
+                        if (page.searchQuery && page.searchMatchCount === 1)
+                            page.settingsController.selectCategory(page.matchingCategories[0].key)
+                    }
                 }
                 Basic.ScrollView {
                     id: navigationScroll
@@ -303,6 +315,7 @@ Rectangle {
         DisplaySettingsPage {
             settingsController: page.settingsController
             resetHint: page.resetBinding?.display ?? ""
+            shortcutFilter: page.searchQuery && page.shortcutSearchText.includes(page.searchQuery) ? page.searchQuery : ""
             category: page.selectedCategory
             title: page.categories.find(item => item.key === page.selectedCategory)?.title ?? ""
         }

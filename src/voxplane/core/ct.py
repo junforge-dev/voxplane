@@ -1,4 +1,4 @@
-"""Enhanced CT display groups and HU/geometry eligibility.
+"""CT display groups and HU/geometry eligibility.
 
 Keep source UIDs and frame indices intact. HU analysis and volume tools require
 HU grayscale frames; derived scalar/color frames may use the 2D pipeline.
@@ -8,6 +8,10 @@ from dataclasses import replace
 from hashlib import sha256
 from math import isfinite
 
+from pydicom.dataset import Dataset
+from pydicom.uid import CTImageStorage
+
+from voxplane.model.dicom_types import PixelValueMeta
 from voxplane.core.enhanced_frames import ENHANCED_CT_CLASSES, is_enhanced_ct
 from voxplane.i18n import message as _msg
 
@@ -66,19 +70,56 @@ def validate_ct_dataset(dataset):
         raise ValueError(_msg("ct.unsupportedPixels"))
 
 
+def classic_ct_value_meta(dataset: Dataset) -> PixelValueMeta:
+    """Identify the modality-rescaled domain for single-frame CT images."""
+    source = str(getattr(dataset, "RescaleType", "") or "").strip()
+    if source:
+        unit = {"HU": "HU", "MGML": "mg/mL", "US": "a.u.", "UNSPECIFIED": "a.u."}.get(
+            source.upper(), source)
+        return PixelValueMeta(unit=unit, source_unit=source)
+
+    image_type = tuple(v.strip().upper() for v in _values(getattr(dataset, "ImageType", None)))
+    energy = str(getattr(dataset, "MultienergyCTAcquisition", "NO")).strip().upper()
+    classic = str(getattr(dataset, "SOPClassUID", "")) == CTImageStorage
+    original = (len(image_type) >= 3 and image_type[0] == "ORIGINAL"
+                and image_type[2] not in ("", "LOCALIZER", "SCOUT"))
+    # Older classic stacks may omit ImageType entirely. Retain their historical
+    # HU interpretation only with a valid single-frame grayscale calibration.
+    legacy = (not image_type and not any(k in dataset for k in
+              ("DerivationDescription", "DerivationCodeSequence", "SourceImageSequence"))
+              and str(getattr(dataset, "NumberOfFrames", 1)) == "1"
+              and str(getattr(dataset, "SamplesPerPixel", "")) == "1"
+              and getattr(dataset, "PhotometricInterpretation", "") in ("MONOCHROME1", "MONOCHROME2"))
+    if legacy:
+        try:
+            slope, intercept = float(dataset.RescaleSlope), float(dataset.RescaleIntercept)
+            legacy = isfinite(slope) and slope != 0 and isfinite(intercept)
+        except (AttributeError, TypeError, ValueError):
+            legacy = False
+    return PixelValueMeta(unit="HU" if classic and energy == "NO" and (original or legacy) else "a.u.")
+
+
+def ct_dataset_supports_hu(dataset: Dataset) -> bool:
+    if (str(getattr(dataset, "SamplesPerPixel", "")) != "1"
+            or getattr(dataset, "PhotometricInterpretation", "") not in ("MONOCHROME1", "MONOCHROME2")):
+        return False
+    if is_enhanced_ct(dataset):
+        return (getattr(dataset, "RescaleType", "") == "HU"
+                and getattr(dataset, "PixelPresentation", "MONOCHROME") == "MONOCHROME")
+    return (getattr(dataset, "SOPClassUID", "") == CTImageStorage
+            and classic_ct_value_meta(dataset).unit == "HU")
+
+
 def ct_hu_tools_supported(series):
-    return all(i.sop_class_uid not in ENHANCED_CT_CLASSES or (
-        dict(i.ct_frame_group).get("RescaleType") == ("HU",)
-        and dict(i.ct_frame_group).get("PixelPresentation", ("MONOCHROME",)) == ("MONOCHROME",)
-    ) for i in series.instances)
+    if series.modality.upper() != "CT":
+        return True  # Non-CT tools have their own modality-specific capability rules.
+    return bool(series.instances) and all(i.ct_hu_supported for i in series.instances)
 
 
 def ct_series_error(series, *, volume=False):
     if series.modality.upper() != "CT":
         return ""
     enhanced = [i for i in series.instances if i.sop_class_uid in ENHANCED_CT_CLASSES]
-    if not enhanced:
-        return ""
     for item in enhanced:
         if item.ct_support_error:
             return item.ct_support_error
@@ -88,6 +129,8 @@ def ct_series_error(series, *, volume=False):
         return ""
     if not ct_hu_tools_supported(series):
         return _msg("ct.unsupportedUnits")
+    if not enhanced:
+        return ""
     first = enhanced[0]
     if len(enhanced) != len(series.instances):
         return _msg("ct.geometry")
@@ -114,7 +157,7 @@ def ct_series_error(series, *, volume=False):
 def ct_view_error(series, view):
     if series is None or view == "tag":
         return ""
-    return ct_series_error(series, volume=view in ("mpr", "3d", "comparempr", "fusion", "petctfusion", "4d"))
+    return ct_series_error(series, volume=view in ("mpr", "cpr", "3d", "comparempr", "fusion", "petctfusion", "4d"))
 
 
 def split_ct_series(instances, build):

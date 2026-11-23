@@ -13,6 +13,7 @@ BINDINGS = {
     'pseudocolor': ('', 'C', 'text.0309'), 'mpr-layout': ('', 'G', 'layout.title'),
     'annotate': ('', 'A', 'text.0307'), 'export': ('', 'E', 'text.0315'),
     'reset': ('', 'Q', 'tools.resetAll'),
+    'paste-roi-in-place': ('', 'Ctrl+Shift+V', 'roiPaste.action'),
     'view-reset': ('view-tools', 'R', 'input.resetCurrentViewTool'),
     'scroll-prev': ('scroll', 'J', 'input.previousSlice'), 'scroll-next': ('scroll', 'K', 'input.nextSlice'),
     'scroll-first': ('scroll', 'H', 'text.1027'), 'scroll-last': ('scroll', 'L', 'text.1028'),

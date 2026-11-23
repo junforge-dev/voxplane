@@ -73,6 +73,29 @@ def test_retiring_mpr_page_never_receives_another_tabs_viewports(sidebar_scene):
     assert not warnings, warnings
 
 
+def test_two_d_page_keeps_its_own_layout_during_tab_replacement(sidebar_scene):
+    window, app, records, warnings = sidebar_scene
+    session = app.windowManager.mainWorkspace
+    original, replacement = open_tabs(app, records[:2])
+    session.activateTabId(original.tab_config.tab_id)
+    loader = window.findChild(QObject, 'workspaceLoader')
+    wait_until(lambda: loader.property('item') is not None
+               and loader.property('item').property('tabController') is original)
+    page = loader.property('item')
+    changed = []
+    page.tabControllerChanged.connect(lambda: changed.append(True))
+    # Model the overlap between selection and deferred deletion deterministically.
+    # An already-created grid must always retain its original tab and cell model.
+    loader.setProperty('loadedTab', replacement)
+    assert page.property('tabController') is original
+    assert page.property('controller') is original.twoDLayout
+    session.activateTabId(replacement.tab_config.tab_id)
+    wait_until(lambda: loader.property('item') is not None
+               and loader.property('item').property('tabController') is replacement)
+    assert not changed, 'The old 2D grid rebound its cells during teardown'
+    assert not warnings, warnings
+
+
 @pytest.mark.parametrize('view_type', ['2d', 'mpr'])
 @pytest.mark.parametrize('incubation_ms', [0, 1, 3, 8])
 def test_detach_image_during_incremental_page_construction(sidebar_scene, view_type, incubation_ms):

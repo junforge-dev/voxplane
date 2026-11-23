@@ -187,11 +187,16 @@ Rectangle {
                             currentTabAllViewports: centerPanel.currentTabAllViewports.filter(
                                 view => view?.setViewportSize !== undefined)
                         })
-                    } else {
+                    } else if (["tag", "3d", "comparempr", "montage"].includes(type)) {
                         sourceComponent = type === "tag" ? tagComponent
-                        : type === "3d" ? volumeComponent
-                        : type === "comparempr" ? compareMprComponent
-                        : type === "montage" ? montageComponent : twoDComponent
+                            : type === "3d" ? volumeComponent
+                            : type === "comparempr" ? compareMprComponent : montageComponent
+                    } else {
+                        // A detached 2D grid can outlive this Loader's selection.
+                        // Keep its live cell model attached to the tab that created it.
+                        setSource(Qt.resolvedUrl("viewportArea/TwoDViewportLayout.qml"), {
+                            tabController: loadedTab
+                        })
                     }
                     active = true
                 }
@@ -239,12 +244,6 @@ Rectangle {
     Component {
         id: compareMprComponent
         ViewportSection.CompareMprViewportLayout { tabController: workspaceLoader.loadedTab }
-    }
-    Component {
-        id: twoDComponent
-        ViewportSection.TwoDViewportLayout {
-            tabController: workspaceLoader.loadedTab
-        }
     }
     Component {
         id: volumeComponent

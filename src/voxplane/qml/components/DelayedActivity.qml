@@ -17,8 +17,9 @@ QtObject {
         elapsed = false
         if (active) timer?.start()
     }
-    onActiveChanged: restart()
-    onActivityKeyChanged: restart()
+    // Page bindings can still notify while the QML methods are being removed.
+    onActiveChanged: root.restart?.()
+    onActivityKeyChanged: root.restart?.()
     Component.onCompleted: restart()
     property Timer timer: Timer {
         interval: root.delayMs

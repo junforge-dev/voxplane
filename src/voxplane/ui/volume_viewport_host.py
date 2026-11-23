@@ -360,9 +360,16 @@ class VolumeViewportHost(QWidget):
         if not self._rendering and monotonic() - self._last_draw > .1:
             self.request_render()
 
+    def _presentation_window_exposed(self):
+        # On Windows the VTK child can cover its entire host. Qt then reports
+        # the host as unexposed even while the child is visible on screen.
+        owner = self.controller._native_owner
+        window = owner.window() if sys.platform == "win32" and owner is not None else self.windowHandle()
+        return window is not None and window.isExposed()
+
     def surface_ready(self):
         child = self.vtk_widget.windowHandle()
-        return (self.windowHandle().isExposed() and child is not None
+        return (self._presentation_window_exposed() and child is not None
                 and child.isExposed() and self.vtk_widget.isVisible()
                 and self.vtk_widget.width() > 0 and self.vtk_widget.height() > 0)
 
@@ -377,7 +384,7 @@ class VolumeViewportHost(QWidget):
             # Native child creation/reparenting may lag behind QML polish.
             # Keep the pending frame, and bound retries on a visible parent.
             now = monotonic()
-            if not self.windowHandle().isExposed():
+            if not self._presentation_window_exposed():
                 self._surface_wait_started = None
                 return  # the next expose resumes rendering after minimization
             if self._surface_wait_started is None:

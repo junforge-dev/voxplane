@@ -372,6 +372,30 @@ def test_volume_export_readiness_tracks_presentation_and_visibility(host, monkey
     assert not c.exportReady and notifications == [True, False]
 
 
+def test_windows_embedded_host_can_be_covered_by_its_own_render_surface(host, monkeypatch):
+    from types import SimpleNamespace
+    from voxplane.ui import volume_viewport_host
+
+    h, c = host
+    monkeypatch.setattr(volume_viewport_host, "sys", SimpleNamespace(platform="win32"))
+    presentation = Mock()
+    presentation.isExposed.return_value = True
+    monkeypatch.setattr(c, "_native_owner", Mock(window=lambda: presentation))
+    monkeypatch.setattr(h, "windowHandle", lambda: Mock(isExposed=lambda: False))
+    h.sync_status()
+    wait_until(lambda: h.data_ready)
+    h._timer.stop()
+    h._render()
+    assert h.frame_ready and h.surface_ready()
+
+    presentation.isExposed.return_value = False
+    assert not h.surface_ready()
+    h.request_render()
+    h._timer.stop()
+    h._render()
+    assert h._dirty and h._surface_wait_started is None
+
+
 def test_unexposed_native_child_defers_draw_and_recovers(host, monkeypatch):
     h, c = host
     child = Mock(isExposed=Mock(return_value=False))
